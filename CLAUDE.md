@@ -64,7 +64,8 @@ npm run lint         # Run ESLint and type checking
 ### Database Setup
 ```bash
 # Apply comprehensive schema to Supabase project
-# Run schema.sql in Supabase SQL editor
+# See database/README.md for complete setup instructions
+# Run files in order: schema-sessions-fixed.sql → schema-updates.sql → migration-add-ended-at.sql
 # Creates core tables: chat_sessions, chat_messages, knowledge_base, training_conversations, daily_budgets, admin_users
 # Creates security tables: suppressed_emails, rate_limits, email_events, disposable_email_domains
 # Includes RLS policies and optimized indexes
