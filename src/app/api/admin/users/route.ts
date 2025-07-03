@@ -125,7 +125,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Update session status (expire, activate, etc.)
-    const updateData: any = {}
+    const updateData: { status?: string } = {}
     if (action === 'expire') {
       updateData.status = 'expired'
     } else if (action === 'activate') {

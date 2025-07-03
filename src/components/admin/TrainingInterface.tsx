@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { Star, ThumbsUp, ThumbsDown, MessageSquare, User, Bot, ArrowRight } from 'lucide-react'
+import { Star, MessageSquare, User, Bot, ArrowRight } from 'lucide-react'
 
 interface TrainingConversation {
   id: string
@@ -114,7 +114,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
     }
 
     // Extract potential tags from the question
-    const potentialTags = []
+    const potentialTags: string[] = []
     const commonSkills = ['javascript', 'python', 'react', 'node', 'aws', 'docker', 'kubernetes', 'typescript', 'sql']
     commonSkills.forEach(skill => {
       if (question.includes(skill)) {
@@ -167,7 +167,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Training Interface</h2>
         <p className="text-gray-600">
-          Review conversations to improve the AI's knowledge base. Rate conversations and extract valuable insights.
+          Review conversations to improve the AI&apos;s knowledge base. Rate conversations and extract valuable insights.
         </p>
       </div>
 

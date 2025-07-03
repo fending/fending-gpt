@@ -133,7 +133,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
     }
   }
 
-  const handleAbortComplete = (originalMessage: string) => {
+  const handleAbortComplete = () => {
     // Message will be repopulated via initialValue prop
     // Clear the lastMessage after a brief delay so user can edit
     setTimeout(() => {

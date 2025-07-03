@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const supabase = await createClient()
 
@@ -73,15 +73,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to trigger queue updates (can be called from other APIs)
-export async function triggerQueueUpdate() {
-  try {
-    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/session/queue-update`, {
-      method: 'POST'
-    })
-    return response.ok
-  } catch (error) {
-    console.error('Error triggering queue update:', error)
-    return false
-  }
-}

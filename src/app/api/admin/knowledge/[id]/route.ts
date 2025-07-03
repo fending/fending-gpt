@@ -4,10 +4,10 @@ import { requireAdmin, extractSessionToken } from '@/lib/auth/middleware'
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await context.params
     const { category, title, content, tags, priority } = await request.json()
 
     if (!title || !content || !category) {
@@ -62,10 +62,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await context.params
 
     // Verify admin access with optimized middleware
     const sessionToken = extractSessionToken(request)

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import crypto from 'crypto'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 interface PostmarkWebhookEvent {
   Type: string
@@ -16,14 +15,13 @@ interface PostmarkWebhookEvent {
   }
   MessageID: string
   Timestamp: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify webhook authenticity (if you configure webhook auth in Postmark)
+    // Parse webhook payload
     const body = await request.text()
-    const signature = request.headers.get('x-postmark-signature')
     
     // Optional: Verify webhook signature if configured
     // if (signature && !verifyPostmarkSignature(body, signature)) {
@@ -67,7 +65,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processEmailEvent(event: PostmarkWebhookEvent, supabase: any) {
+async function processEmailEvent(event: PostmarkWebhookEvent, supabase: SupabaseClient) {
   const email = event.Email.toLowerCase()
 
   switch (event.Type) {
@@ -97,7 +95,7 @@ async function processEmailEvent(event: PostmarkWebhookEvent, supabase: any) {
     .eq('processed', false)
 }
 
-async function handleBounce(email: string, event: PostmarkWebhookEvent, supabase: any) {
+async function handleBounce(email: string, event: PostmarkWebhookEvent, supabase: SupabaseClient) {
   const bounceType = event.Bounce?.Type
   const description = event.Bounce?.Description || 'Email bounced'
 
@@ -130,7 +128,7 @@ async function handleBounce(email: string, event: PostmarkWebhookEvent, supabase
   }
 }
 
-async function handleSpamComplaint(email: string, event: PostmarkWebhookEvent, supabase: any) {
+async function handleSpamComplaint(email: string, event: PostmarkWebhookEvent, supabase: SupabaseClient) {
   const complaintType = event.Complaint?.ComplaintFeedbackType || 'spam'
   
   console.log(`Spam complaint from ${email}, adding to suppression list`)
@@ -156,19 +154,3 @@ async function handleSpamComplaint(email: string, event: PostmarkWebhookEvent, s
   }
 }
 
-// Optional: Verify Postmark webhook signature
-function verifyPostmarkSignature(body: string, signature: string): boolean {
-  if (!process.env.POSTMARK_WEBHOOK_SECRET) {
-    return true // Skip verification if secret not configured
-  }
-
-  const expectedSignature = crypto
-    .createHmac('sha256', process.env.POSTMARK_WEBHOOK_SECRET)
-    .update(body)
-    .digest('hex')
-
-  return crypto.timingSafeEqual(
-    Buffer.from(signature, 'hex'),
-    Buffer.from(expectedSignature, 'hex')
-  )
-}

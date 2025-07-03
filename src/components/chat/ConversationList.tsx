@@ -22,10 +22,6 @@ export default function ConversationList({
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  useEffect(() => {
-    fetchConversations()
-  }, [fetchConversations])
-
   const fetchConversations = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -41,6 +37,10 @@ export default function ConversationList({
       setLoading(false)
     }
   }, [supabase])
+
+  useEffect(() => {
+    fetchConversations()
+  }, [fetchConversations])
 
   if (loading) {
     return (

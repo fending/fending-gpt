@@ -45,7 +45,20 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform data to conversation pairs (user question + AI answer)
-    const conversations: any[] = []
+    const conversations: Array<{
+      id: string
+      session_id: string
+      email: string
+      user_message: string
+      ai_response: string
+      created_at: string
+      question_type?: string | null
+      confidence_score?: number | null
+      response_time_ms?: number | null
+      quality_rating?: number
+      is_approved?: boolean
+      admin_notes?: string | null
+    }> = []
     
     sessions?.forEach(session => {
       const messages = session.chat_messages || []
@@ -60,13 +73,13 @@ export async function GET(request: NextRequest) {
             id: `${session.id}-${userMessage.id}`,
             session_id: session.id,
             email: session.email,
-            question: userMessage.content,
-            answer: aiMessage.content,
+            user_message: userMessage.content,
+            ai_response: aiMessage.content,
             question_type: aiMessage.question_type,
             confidence_score: aiMessage.confidence_score,
             response_time_ms: aiMessage.response_time_ms,
             created_at: userMessage.created_at,
-            quality_rating: null, // Will be set from training_conversations table
+            quality_rating: undefined, // Will be set from training_conversations table
             is_approved: false,
             admin_notes: null
           })
@@ -143,7 +156,7 @@ export async function PATCH(request: NextRequest) {
     const sessionId = parts.slice(0, 5).join('-')
 
     // Check if training conversation already exists
-    const { data: existingTraining, error: checkError } = await supabase
+    const { data: existingTraining } = await supabase
       .from('training_conversations')
       .select('id')
       .eq('original_session_id', sessionId)

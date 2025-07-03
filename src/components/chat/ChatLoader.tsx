@@ -70,7 +70,7 @@ export default function ChatLoader({ onAbort, onAbortComplete, originalMessage =
   const [elapsedTime, setElapsedTime] = useState(0)
   const [currentPhrase, setCurrentPhrase] = useState("")
   const [showAborted, setShowAborted] = useState(false)
-  const [minDisplayMet, setMinDisplayMet] = useState(false)
+  const [/* minDisplayMet */, setMinDisplayMet] = useState(false)
 
   // Determine current phase based on elapsed time
   const getCurrentPhase = (elapsed: number) => {

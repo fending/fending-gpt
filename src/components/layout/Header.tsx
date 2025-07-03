@@ -12,10 +12,6 @@ export default function Header() {
   const supabase = createClient()
   const router = useRouter()
 
-  useEffect(() => {
-    getUser()
-  }, [getUser])
-
   const getUser = useCallback(async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (authUser) {
@@ -30,6 +26,10 @@ export default function Header() {
       }
     }
   }, [supabase])
+
+  useEffect(() => {
+    getUser()
+  }, [getUser])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
