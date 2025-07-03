@@ -4,38 +4,72 @@ import { createClient } from '@/lib/supabase/server'
 export async function POST() {
   try {
     const supabase = await createClient()
-
-    // Clean up expired sessions
-    const now = new Date().toISOString()
+    const now = new Date()
+    const nowISO = now.toISOString()
     
-    const { data: expiredSessions, error: fetchError } = await supabase
+    // Calculate thresholds
+    const inactivityThreshold = new Date(now.getTime() - 5 * 60 * 1000) // 5 minutes ago
+
+    // 1. Clean up sessions that exceeded hard time limit (1 hour)
+    const { data: hardExpiredSessions, error: hardFetchError } = await supabase
       .from('chat_sessions')
       .select('id, status')
-      .lt('expires_at', now)
+      .lt('expires_at', nowISO)
       .in('status', ['active', 'queued', 'pending'])
 
-    if (fetchError) {
-      console.error('Error fetching expired sessions:', fetchError)
+    if (hardFetchError) {
+      console.error('Error fetching hard expired sessions:', hardFetchError)
       return NextResponse.json({ error: 'Failed to fetch expired sessions' }, { status: 500 })
     }
 
-    if (expiredSessions && expiredSessions.length > 0) {
-      // Mark expired sessions as expired
+    let expiredCount = 0
+
+    if (hardExpiredSessions && hardExpiredSessions.length > 0) {
+      // Mark hard expired sessions as expired
       const { error: expireError } = await supabase
         .from('chat_sessions')
         .update({ 
           status: 'expired',
-          ended_at: now
+          ended_at: nowISO
         })
-        .lt('expires_at', now)
+        .lt('expires_at', nowISO)
         .in('status', ['active', 'queued', 'pending'])
 
       if (expireError) {
-        console.error('Error expiring sessions:', expireError)
+        console.error('Error expiring hard limit sessions:', expireError)
         return NextResponse.json({ error: 'Failed to expire sessions' }, { status: 500 })
       }
 
-      console.log(`Expired ${expiredSessions.length} sessions`)
+      expiredCount += hardExpiredSessions.length
+      console.log(`Hard expired ${hardExpiredSessions.length} sessions (time limit exceeded)`)
+    }
+
+    // 2. Clean up sessions inactive for more than 5 minutes
+    const { data: inactiveSessions, error: inactiveFetchError } = await supabase
+      .from('chat_sessions')
+      .select('id, status, last_activity_at')
+      .lt('last_activity_at', inactivityThreshold.toISOString())
+      .eq('status', 'active')
+
+    if (inactiveFetchError) {
+      console.error('Error fetching inactive sessions:', inactiveFetchError)
+    } else if (inactiveSessions && inactiveSessions.length > 0) {
+      // Mark inactive sessions as expired
+      const { error: inactiveExpireError } = await supabase
+        .from('chat_sessions')
+        .update({ 
+          status: 'expired',
+          ended_at: nowISO
+        })
+        .lt('last_activity_at', inactivityThreshold.toISOString())
+        .eq('status', 'active')
+
+      if (inactiveExpireError) {
+        console.error('Error expiring inactive sessions:', inactiveExpireError)
+      } else {
+        expiredCount += inactiveSessions.length
+        console.log(`Expired ${inactiveSessions.length} sessions due to inactivity`)
+      }
     }
 
     // Trigger queue management after cleanup
@@ -43,7 +77,11 @@ export async function POST() {
 
     return NextResponse.json({ 
       message: 'Cleanup completed successfully',
-      expiredSessions: expiredSessions?.length || 0
+      expiredSessions: expiredCount,
+      details: {
+        hardExpired: hardExpiredSessions?.length || 0,
+        inactivityExpired: inactiveSessions?.length || 0
+      }
     })
 
   } catch (error) {
@@ -62,7 +100,7 @@ async function triggerQueueManagement() {
     .select('*', { count: 'exact', head: true })
     .eq('status', 'active')
 
-  const MAX_CONCURRENT_SESSIONS = 5
+  const MAX_CONCURRENT_SESSIONS = 10
   const slotsAvailable = MAX_CONCURRENT_SESSIONS - (activeSessions || 0)
 
   if (slotsAvailable > 0) {

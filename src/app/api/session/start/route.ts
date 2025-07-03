@@ -3,9 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import { validateSession, extractSessionToken } from '@/lib/auth/middleware'
 import crypto from 'crypto'
 
-const MAX_CONCURRENT_SESSIONS = 5
+const MAX_CONCURRENT_SESSIONS = 10
 const MAX_QUEUE_SIZE = 20
-const SESSION_DURATION_HOURS = 1
+const SESSION_DURATION_MINUTES = 60
 
 // Helper function for queue updates
 async function triggerQueueUpdateHelper() {
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     // Generate a secure session token
     const token = crypto.randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000)
+    const expiresAt = new Date(Date.now() + SESSION_DURATION_MINUTES * 60 * 1000)
 
     // Get current active sessions count
     const { count: activeSessions } = await supabase
@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
           status: 'active',
           expires_at: expiresAt.toISOString(),
           activated_at: new Date().toISOString(),
+          last_activity_at: new Date().toISOString(),
           user_agent: request.headers.get('user-agent') || undefined,
           referrer: request.headers.get('referer') || undefined,
         })
@@ -162,7 +163,8 @@ export async function GET(request: NextRequest) {
         .from('chat_sessions')
         .update({ 
           status: 'active',
-          activated_at: new Date().toISOString()
+          activated_at: new Date().toISOString(),
+          last_activity_at: new Date().toISOString()
         })
         .eq('id', session!.id)
 
@@ -206,7 +208,7 @@ export async function GET(request: NextRequest) {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active')
 
-      const MAX_CONCURRENT_SESSIONS = 5
+      const MAX_CONCURRENT_SESSIONS = 10
       if ((activeSessions || 0) < MAX_CONCURRENT_SESSIONS) {
         // Activate this queued session
         const { error: updateError } = await supabase
@@ -214,7 +216,8 @@ export async function GET(request: NextRequest) {
           .update({ 
             status: 'active',
             queue_position: null,
-            activated_at: new Date().toISOString()
+            activated_at: new Date().toISOString(),
+            last_activity_at: new Date().toISOString()
           })
           .eq('id', session!.id)
 

@@ -8,8 +8,8 @@ interface TrainingConversation {
   id: string
   session_id: string
   email: string
-  question: string
-  answer: string
+  user_message: string
+  ai_response: string
   question_type: string | null
   confidence_score: number | null
   response_time_ms: number | null
@@ -92,15 +92,15 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
     if (!selectedConversation || !onSuggestKnowledge) return
 
     // Extract key information from the conversation
-    const suggestedTitle = selectedConversation.question.length > 50 
-      ? selectedConversation.question.substring(0, 50) + '...'
-      : selectedConversation.question
+    const suggestedTitle = selectedConversation.user_message.length > 50 
+      ? selectedConversation.user_message.substring(0, 50) + '...'
+      : selectedConversation.user_message
 
-    const suggestedContent = `Q: ${selectedConversation.question}\n\nA: ${selectedConversation.answer}`
+    const suggestedContent = `Q: ${selectedConversation.user_message}\n\nA: ${selectedConversation.ai_response}`
 
     // Determine category based on question content
     let suggestedCategory = 'experience'
-    const question = selectedConversation.question.toLowerCase()
+    const question = selectedConversation.user_message.toLowerCase()
     if (question.includes('skill') || question.includes('technology')) {
       suggestedCategory = 'skills'
     } else if (question.includes('project') || question.includes('built') || question.includes('develop')) {
@@ -206,7 +206,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
                     )}
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 truncate mb-1">{conversation.question}</p>
+                <p className="text-sm text-gray-600 truncate mb-1">{conversation.user_message}</p>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">
                     {formatDistanceToNow(new Date(conversation.created_at), { addSuffix: true })}
@@ -235,7 +235,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
                     <User className="h-5 w-5 text-blue-600 mt-1" />
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-900">User Question</p>
-                      <p className="text-sm text-gray-600">{selectedConversation.question}</p>
+                      <p className="text-sm text-gray-600">{selectedConversation.user_message}</p>
                     </div>
                   </div>
                   
@@ -243,7 +243,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
                     <Bot className="h-5 w-5 text-green-600 mt-1" />
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-900">AI Response</p>
-                      <p className="text-sm text-gray-600">{selectedConversation.answer}</p>
+                      <p className="text-sm text-gray-600">{selectedConversation.ai_response}</p>
                     </div>
                   </div>
 

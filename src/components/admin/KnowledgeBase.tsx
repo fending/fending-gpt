@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Search, Plus, Edit, Trash2, Save, X, BookOpen, Tag, Calendar } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Save, X, BookOpen, Tag, Calendar, Upload, Download } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 interface KnowledgeEntry {
   id: string
-  category: 'resume' | 'projects' | 'skills' | 'experience' | 'personal' | 'company'
+  category: 'affiliations' | 'experience' | 'skills' | 'projects' | 'education' | 'personal' | 'company'
   title: string
   content: string
   tags: string[]
@@ -35,13 +35,229 @@ export default function KnowledgeBase({ prefilledData, onDataUsed }: KnowledgeBa
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingEntry, setEditingEntry] = useState<KnowledgeEntry | null>(null)
   const [formData, setFormData] = useState({
-    category: 'experience' as KnowledgeEntry['category'],
+    category: 'affiliations' as KnowledgeEntry['category'],
     title: '',
     content: '',
     tags: [] as string[],
     priority: 3
   })
   const [tagInput, setTagInput] = useState('')
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [parsedData, setParsedData] = useState<ImportEntry[]>([])
+
+  interface ImportEntry {
+    category: string
+    title: string
+    content: string
+    tags: string[]
+    priority: number
+  }
+  const [importErrors, setImportErrors] = useState<string[]>([])
+  const [showPreview, setShowPreview] = useState(false)
+
+  // Robust CSV parsing function with full quote and multiline support
+  const parseCSV = (content: string): ImportEntry[] => {
+    if (!content.trim()) {
+      setImportErrors(['CSV file is empty'])
+      return []
+    }
+
+    const parseCSVContent = (csvText: string): string[][] => {
+      const result: string[][] = []
+      let currentRow: string[] = []
+      let currentField = ''
+      let inQuotes = false
+      let i = 0
+
+      while (i < csvText.length) {
+        const char = csvText[i]
+        const nextChar = csvText[i + 1]
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            // Escaped quote: "" becomes "
+            currentField += '"'
+            i += 2
+          } else {
+            // Toggle quote mode
+            inQuotes = !inQuotes
+            i++
+          }
+        } else if (char === ',' && !inQuotes) {
+          // Field separator outside quotes
+          currentRow.push(currentField.trim())
+          currentField = ''
+          i++
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+          // Row separator outside quotes
+          if (currentField || currentRow.length > 0) {
+            currentRow.push(currentField.trim())
+            if (currentRow.some(field => field.length > 0)) {
+              result.push(currentRow)
+            }
+            currentRow = []
+            currentField = ''
+          }
+          // Skip \r\n sequences
+          if (char === '\r' && nextChar === '\n') {
+            i += 2
+          } else {
+            i++
+          }
+        } else {
+          currentField += char
+          i++
+        }
+      }
+
+      // Add the last field and row
+      if (currentField || currentRow.length > 0) {
+        currentRow.push(currentField.trim())
+        if (currentRow.some(field => field.length > 0)) {
+          result.push(currentRow)
+        }
+      }
+
+      return result
+    }
+
+    const rows = parseCSVContent(content)
+    
+    if (rows.length < 2) {
+      setImportErrors(['CSV file must have at least a header row and one data row'])
+      return []
+    }
+
+    const headers = rows[0]
+    const expectedHeaders = ['category', 'title', 'content', 'tags', 'priority']
+    
+    // Validate headers
+    const missingHeaders = expectedHeaders.filter(h => !headers.includes(h))
+    if (missingHeaders.length > 0) {
+      setImportErrors([`Missing required columns: ${missingHeaders.join(', ')}`])
+      return []
+    }
+
+    const data: ImportEntry[] = []
+    const errors: string[] = []
+
+    // Parse data rows
+    for (let i = 1; i < rows.length; i++) {
+      const values = rows[i]
+      
+      if (values.length !== headers.length) {
+        errors.push(`Row ${i + 1}: Expected ${headers.length} columns, got ${values.length}`)
+        continue
+      }
+
+      const rowData: Record<string, string> = {}
+      headers.forEach((header, index) => {
+        rowData[header] = values[index] || ''
+      })
+
+      // Validate category
+      const validCategories = ['affiliations', 'experience', 'skills', 'projects', 'education', 'personal', 'company']
+      if (!validCategories.includes(rowData.category)) {
+        errors.push(`Row ${i + 1}: Invalid category "${rowData.category}". Must be one of: ${validCategories.join(', ')}`)
+        continue
+      }
+
+      // Validate priority
+      const priority = parseInt(rowData.priority)
+      if (isNaN(priority) || priority < 1 || priority > 5) {
+        errors.push(`Row ${i + 1}: Priority must be a number between 1 and 5`)
+        continue
+      }
+
+      // Process tags
+      const tags = rowData.tags ? rowData.tags.split(';').map((t: string) => t.trim()).filter((t: string) => t) : []
+
+      // Validate required fields
+      if (!rowData.title?.trim() || !rowData.content?.trim()) {
+        errors.push(`Row ${i + 1}: Title and content are required`)
+        continue
+      }
+
+      const entry: ImportEntry = {
+        category: rowData.category,
+        title: rowData.title.trim(),
+        content: rowData.content.trim(),
+        tags,
+        priority
+      }
+
+      data.push(entry)
+    }
+
+    setImportErrors(errors)
+    return data
+  }
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith('.csv')) {
+      setImportErrors(['Please select a CSV file'])
+      return
+    }
+
+    setCsvFile(file)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const content = e.target?.result as string
+      const parsed = parseCSV(content)
+      setParsedData(parsed)
+      if (parsed.length > 0) {
+        setShowPreview(true)
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  const downloadTemplate = () => {
+    const template = `category,title,content,tags,priority
+experience,"Senior Engineer at TechCorp","Led team of 5 developers building React applications with focus on scalable architecture and code quality.","leadership;react;javascript;team-management",5
+skills,"JavaScript Expertise","Expert-level JavaScript and TypeScript development with 8+ years of experience building web applications.","javascript;typescript;programming;frontend",4
+projects,"E-commerce Platform","Built scalable e-commerce platform serving 100k+ users using React, Node.js, and AWS infrastructure.","react;nodejs;aws;ecommerce;fullstack",4
+education,"Computer Science Degree","Bachelor of Science in Computer Science from State University, graduated with honors.","education;computer-science;degree",3
+affiliations,"IEEE Member","Active member of IEEE Computer Society, contributing to industry standards and best practices.","ieee;professional;standards",3`
+
+    const blob = new Blob([template], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'knowledge-base-template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const importData = async () => {
+    if (parsedData.length === 0) return
+
+    try {
+      const sessionToken = localStorage.getItem('sessionToken')
+      const response = await fetch(`/api/admin/knowledge/import?token=${sessionToken}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: parsedData })
+      })
+
+      if (!response.ok) throw new Error('Import failed')
+      
+      // Refresh entries and close modal
+      await fetchEntries()
+      setShowImportModal(false)
+      setShowPreview(false)
+      setCsvFile(null)
+      setParsedData([])
+      setImportErrors([])
+    } catch (error) {
+      console.error('Import error:', error)
+      setImportErrors(['Failed to import data. Please try again.'])
+    }
+  }
 
   useEffect(() => {
     fetchEntries()
@@ -88,14 +304,13 @@ export default function KnowledgeBase({ prefilledData, onDataUsed }: KnowledgeBa
       
       const method = editingEntry ? 'PUT' : 'POST'
       const url = editingEntry 
-        ? `/api/admin/knowledge/${editingEntry.id}`
-        : '/api/admin/knowledge'
+        ? `/api/admin/knowledge/${editingEntry.id}?token=${sessionToken}`
+        : `/api/admin/knowledge?token=${sessionToken}`
 
       const response = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionToken}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           ...formData,
@@ -120,25 +335,25 @@ export default function KnowledgeBase({ prefilledData, onDataUsed }: KnowledgeBa
 
     try {
       const sessionToken = localStorage.getItem('sessionToken')
-      const response = await fetch(`/api/admin/knowledge/${entryId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`
-        }
+      const response = await fetch(`/api/admin/knowledge/${entryId}?token=${sessionToken}`, {
+        method: 'DELETE'
       })
 
-      if (!response.ok) throw new Error('Failed to delete knowledge entry')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || 'Failed to delete knowledge entry')
+      }
       
       await fetchEntries()
     } catch (error) {
       console.error('Error deleting knowledge entry:', error)
-      alert('Failed to delete knowledge entry')
+      alert(`Failed to delete knowledge entry: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   const resetForm = () => {
     setFormData({
-      category: 'experience',
+      category: 'affiliations',
       title: '',
       content: '',
       tags: [],
@@ -214,13 +429,22 @@ export default function KnowledgeBase({ prefilledData, onDataUsed }: KnowledgeBa
               Manage the information the AI uses to answer questions about Brian.
             </p>
           </div>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center space-x-2"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add New</span>
-          </button>
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center space-x-2"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Import CSV</span>
+            </button>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center space-x-2"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add New</span>
+            </button>
+          </div>
         </div>
 
         {/* Search and Filter */}
@@ -241,10 +465,11 @@ export default function KnowledgeBase({ prefilledData, onDataUsed }: KnowledgeBa
             className="border border-gray-300 rounded-md px-3 py-2"
           >
             <option value="all">All Categories</option>
-            <option value="resume">Resume</option>
-            <option value="projects">Projects</option>
-            <option value="skills">Skills</option>
+            <option value="affiliations">Affiliations</option>
             <option value="experience">Experience</option>
+            <option value="skills">Skills</option>
+            <option value="projects">Projects</option>
+            <option value="education">Education</option>
             <option value="personal">Personal</option>
             <option value="company">Company</option>
           </select>
@@ -280,10 +505,11 @@ export default function KnowledgeBase({ prefilledData, onDataUsed }: KnowledgeBa
                   })}
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
                 >
-                  <option value="resume">Resume</option>
-                  <option value="projects">Projects</option>
-                  <option value="skills">Skills</option>
+                  <option value="affiliations">Affiliations</option>
                   <option value="experience">Experience</option>
+                  <option value="skills">Skills</option>
+                  <option value="projects">Projects</option>
+                  <option value="education">Education</option>
                   <option value="personal">Personal</option>
                   <option value="company">Company</option>
                 </select>
@@ -445,6 +671,176 @@ export default function KnowledgeBase({ prefilledData, onDataUsed }: KnowledgeBa
           )}
         </div>
       </div>
+
+      {/* CSV Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Import Knowledge Base Entries</h3>
+              <button
+                onClick={() => {
+                  setShowImportModal(false)
+                  setShowPreview(false)
+                  setCsvFile(null)
+                  setParsedData([])
+                  setImportErrors([])
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {!showPreview ? (
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                  <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium">Upload CSV File</p>
+                    <p className="text-gray-600">
+                      Choose a CSV file with columns: category, title, content, tags, priority
+                    </p>
+                    <div className="flex justify-center space-x-4 mt-4">
+                      <label className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 cursor-pointer">
+                        Choose File
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        onClick={downloadTemplate}
+                        className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 flex items-center space-x-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>Download Template</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {csvFile && (
+                  <div className="bg-blue-50 p-4 rounded-md">
+                    <p className="font-medium">Selected file: {csvFile.name}</p>
+                    <p className="text-sm text-gray-600">Size: {(csvFile.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                )}
+
+                {importErrors.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                    <h4 className="font-medium text-red-800 mb-2">Import Errors:</h4>
+                    <ul className="list-disc list-inside text-red-700 space-y-1">
+                      {importErrors.map((error, index) => (
+                        <li key={index}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="bg-gray-50 p-4 rounded-md">
+                  <h4 className="font-medium mb-2">CSV Format Requirements:</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• <strong>category:</strong> One of: affiliations, experience, skills, projects, education, personal, company</li>
+                    <li>• <strong>title:</strong> Short descriptive title (required)</li>
+                    <li>• <strong>content:</strong> Detailed content (required)</li>
+                    <li>• <strong>tags:</strong> Semicolon-separated tags (e.g., &quot;javascript;react;frontend&quot;)</li>
+                    <li>• <strong>priority:</strong> Number from 1-5 (5 being highest priority)</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="font-medium">Preview ({parsedData.length} entries)</h4>
+                  <div className="space-x-2">
+                    <button
+                      onClick={() => setShowPreview(false)}
+                      className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={importData}
+                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                    >
+                      Import {parsedData.length} Entries
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Category</th>
+                        <th className="px-4 py-2 text-left">Title</th>
+                        <th className="px-4 py-2 text-left">Content</th>
+                        <th className="px-4 py-2 text-left">Tags</th>
+                        <th className="px-4 py-2 text-left">Priority</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parsedData.map((row, index) => (
+                        <tr key={index} className="border-t">
+                          <td className="px-4 py-2">
+                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                              {row.category}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 font-medium">{row.title}</td>
+                          <td className="px-4 py-2">
+                            <div className="max-w-xs truncate" title={row.content}>
+                              {row.content}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex flex-wrap gap-1">
+                              {row.tags.slice(0, 3).map((tag: string, tagIndex: number) => (
+                                <span key={tagIndex} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded">
+                                  {tag}
+                                </span>
+                              ))}
+                              {row.tags.length > 3 && (
+                                <span className="text-xs text-gray-500">+{row.tags.length - 3} more</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <span
+                                  key={star}
+                                  className={star <= row.priority ? 'text-yellow-400' : 'text-gray-300'}
+                                >
+                                  ★
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {importErrors.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                    <h4 className="font-medium text-red-800 mb-2">Import Errors:</h4>
+                    <ul className="list-disc list-inside text-red-700 space-y-1">
+                      {importErrors.map((error, index) => (
+                        <li key={index}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -4,8 +4,8 @@ import { checkRateLimit, checkEmailSuppression, checkDisposableEmail, getClientI
 import { verifyRecaptcha } from '@/lib/security/recaptcha'
 import crypto from 'crypto'
 
-const MAX_CONCURRENT_SESSIONS = 5
-const SESSION_DURATION_HOURS = 1
+const MAX_CONCURRENT_SESSIONS = 10
+const SESSION_DURATION_MINUTES = 60
 
 export async function POST(request: NextRequest) {
   try {
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // Generate a secure session token
     const token = crypto.randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000)
+    const expiresAt = new Date(Date.now() + SESSION_DURATION_MINUTES * 60 * 1000)
 
     // Get current active sessions count
     const { count: activeSessions } = await supabase

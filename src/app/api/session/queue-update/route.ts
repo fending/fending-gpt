@@ -40,7 +40,7 @@ export async function POST() {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active')
 
-    const MAX_CONCURRENT_SESSIONS = 5
+    const MAX_CONCURRENT_SESSIONS = 10
     const slotsAvailable = MAX_CONCURRENT_SESSIONS - (activeSessions || 0)
 
     if (slotsAvailable > 0 && queuedSessions.length > 0) {

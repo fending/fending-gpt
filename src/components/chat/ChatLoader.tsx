@@ -103,15 +103,15 @@ export default function ChatLoader({ onAbort, onAbortComplete, originalMessage =
     // Minimum display time tracker
     const minDisplayTimer = setTimeout(() => {
       setMinDisplayMet(true)
-    }, 1500)
+    }, 2000)
 
     // Main timer for elapsed time and phrase rotation
     const interval = setInterval(() => {
       setElapsedTime(prev => {
         const newElapsed = prev + 100
         
-        // Update phrase every 1.5 seconds
-        if (newElapsed % 1500 === 0) {
+        // Update phrase every 4 seconds
+        if (newElapsed % 4000 === 0) {
           const phase = getCurrentPhase(newElapsed)
           setCurrentPhrase(getRandomPhrase(phase))
         }

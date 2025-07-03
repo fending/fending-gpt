@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SessionChatInterface from '@/components/chat/SessionChatInterface'
+import SessionManager from '@/components/session/SessionManager'
 
 function ChatPageContent() {
   const [sessionToken, setSessionToken] = useState<string | null>(null)
@@ -92,8 +93,23 @@ function ChatPageContent() {
     )
   }
 
+  const handleSessionExpired = () => {
+    // Clear token and redirect to home
+    localStorage.removeItem('sessionToken')
+    alert('Your session has expired due to inactivity. Please start a new session.')
+    router.push('/')
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
+      {/* Session Manager for activity tracking and timeout warnings */}
+      {sessionToken && (
+        <SessionManager 
+          sessionToken={sessionToken} 
+          onSessionExpired={handleSessionExpired}
+        />
+      )}
+      
       {/* Simple header for session-based chat */}
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex justify-between items-center">

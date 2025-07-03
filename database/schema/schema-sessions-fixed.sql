@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     activated_at TIMESTAMP WITH TIME ZONE,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     completed_at TIMESTAMP WITH TIME ZONE,
+    last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     total_cost_usd DECIMAL(10, 6) DEFAULT 0,
     total_tokens_used INTEGER DEFAULT 0,
     user_agent TEXT,
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 -- Knowledge base for Brian's career information
 CREATE TABLE IF NOT EXISTS knowledge_base (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    category TEXT NOT NULL CHECK (category IN ('resume', 'projects', 'skills', 'experience', 'personal', 'company')),
+    category TEXT NOT NULL CHECK (category IN ('affiliations', 'experience', 'skills', 'projects', 'education', 'personal', 'company')),
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     tags TEXT[],

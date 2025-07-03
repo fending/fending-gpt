@@ -27,6 +27,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 })
     }
 
+    // Update session activity
+    await supabase
+      .from('chat_sessions')
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq('token', sessionToken)
+
     // Check if session is expired
     if (new Date(session.expires_at) < new Date()) {
       await supabase

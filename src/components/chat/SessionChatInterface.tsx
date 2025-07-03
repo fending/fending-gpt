@@ -111,6 +111,9 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
       
       // Refresh messages to get the latest
       await fetchMessages()
+      
+      // Clear the input after successful response
+      setLastMessage('')
 
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -172,6 +175,13 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
             </div>
           </div>
         </div>
+        {sendingMessage && (
+          <ChatLoader 
+            onAbort={handleAbortMessage}
+            onAbortComplete={handleAbortComplete}
+            originalMessage={lastMessage}
+          />
+        )}
         <ChatInput 
           onSendMessage={sendMessage} 
           disabled={sendingMessage}
