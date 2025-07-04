@@ -64,7 +64,31 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
         .order('created_at', { ascending: true })
 
       if (error) throw error
-      setMessages(data || [])
+      
+      // Preserve any temporary messages (those with temp- IDs) that aren't in the database yet
+      setMessages(prev => {
+        const tempMessages = prev.filter(msg => msg.id.startsWith('temp-'))
+        const dbMessages = data || []
+        
+        // If there are temp messages, merge them with DB messages, avoiding duplicates
+        if (tempMessages.length > 0) {
+          const allMessages = [...dbMessages]
+          tempMessages.forEach(tempMsg => {
+            // Only add temp message if there's no DB message with the same content and recent timestamp
+            const isDuplicate = dbMessages.some(dbMsg => 
+              dbMsg.content === tempMsg.content && 
+              dbMsg.role === tempMsg.role &&
+              Math.abs(new Date(dbMsg.created_at).getTime() - new Date(tempMsg.created_at).getTime()) < 5000 // Within 5 seconds
+            )
+            if (!isDuplicate) {
+              allMessages.push(tempMsg)
+            }
+          })
+          return allMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        }
+        
+        return dbMessages
+      })
     } catch (error) {
       console.error('Error fetching messages:', error)
       // Handle session expiry or error
