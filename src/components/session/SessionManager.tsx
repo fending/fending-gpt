@@ -8,7 +8,7 @@ interface SessionManagerProps {
   onSessionExpired?: () => void
 }
 
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000 // 5 minutes in milliseconds
+const INACTIVITY_TIMEOUT = 10 * 60 * 1000 // 10 minutes in milliseconds
 const WARNING_THRESHOLD = 1 * 60 * 1000 // 1 minute warning in milliseconds
 const ACTIVITY_UPDATE_INTERVAL = 30 * 1000 // Update activity every 30 seconds
 
@@ -43,10 +43,10 @@ export default function SessionManager({ sessionToken, onSessionExpired }: Sessi
       countdownIntervalRef.current = null
     }
 
-    // Set warning timeout (4 minutes from now)
+    // Set warning timeout (after 9 minutes of inactivity, start 1-minute warning)
     warningTimeoutRef.current = setTimeout(() => {
       setShowWarning(true)
-      setTimeRemaining(WARNING_THRESHOLD)
+      setTimeRemaining(WARNING_THRESHOLD) // Start 1-minute countdown
       
       // Start countdown
       countdownIntervalRef.current = setInterval(() => {
@@ -68,7 +68,7 @@ export default function SessionManager({ sessionToken, onSessionExpired }: Sessi
       
     }, INACTIVITY_TIMEOUT - WARNING_THRESHOLD)
 
-    // Set session expiry timeout (5 minutes from now)
+    // Set session expiry timeout (10 minutes from now)
     activityTimeoutRef.current = setTimeout(() => {
       setIsActive(false)
       onSessionExpired?.()

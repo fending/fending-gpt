@@ -8,9 +8,9 @@ export async function POST() {
     const nowISO = now.toISOString()
     
     // Calculate thresholds
-    const inactivityThreshold = new Date(now.getTime() - 5 * 60 * 1000) // 5 minutes ago
+    const inactivityThreshold = new Date(now.getTime() - 10 * 60 * 1000) // 10 minutes ago
 
-    // 1. Clean up sessions that exceeded hard time limit (1 hour)
+    // 1. Clean up sessions that exceeded hard time limit (45 minutes)
     const { data: hardExpiredSessions, error: hardFetchError } = await supabase
       .from('chat_sessions')
       .select('id, status')
@@ -41,10 +41,10 @@ export async function POST() {
       }
 
       expiredCount += hardExpiredSessions.length
-      console.log(`Hard expired ${hardExpiredSessions.length} sessions (time limit exceeded)`)
+      console.log(`Hard expired ${hardExpiredSessions.length} sessions (45min time limit exceeded)`)
     }
 
-    // 2. Clean up sessions inactive for more than 5 minutes
+    // 2. Clean up sessions inactive for more than 10 minutes
     const { data: inactiveSessions, error: inactiveFetchError } = await supabase
       .from('chat_sessions')
       .select('id, status, last_activity_at')
@@ -68,12 +68,14 @@ export async function POST() {
         console.error('Error expiring inactive sessions:', inactiveExpireError)
       } else {
         expiredCount += inactiveSessions.length
-        console.log(`Expired ${inactiveSessions.length} sessions due to inactivity`)
+        console.log(`Expired ${inactiveSessions.length} sessions due to 10min inactivity`)
       }
     }
 
     // Trigger queue management after cleanup
     await triggerQueueManagement()
+    
+    console.log(`✅ Session cleanup completed: ${expiredCount} sessions expired`)
 
     return NextResponse.json({ 
       message: 'Cleanup completed successfully',

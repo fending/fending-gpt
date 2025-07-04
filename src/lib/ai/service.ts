@@ -44,6 +44,10 @@ export class AIService {
     return this.provider.isHealthy()
   }
 
+  getProvider(): AIProvider {
+    return this.provider
+  }
+
   getProviderInfo() {
     return {
       name: this.provider.name,

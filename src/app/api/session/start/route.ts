@@ -5,7 +5,7 @@ import crypto from 'crypto'
 
 const MAX_CONCURRENT_SESSIONS = 10
 const MAX_QUEUE_SIZE = 20
-const SESSION_DURATION_MINUTES = 60
+const SESSION_DURATION_MINUTES = 45
 
 // Helper function for queue updates
 async function triggerQueueUpdateHelper() {

@@ -5,7 +5,7 @@ import { verifyRecaptcha } from '@/lib/security/recaptcha'
 import crypto from 'crypto'
 
 const MAX_CONCURRENT_SESSIONS = 10
-const SESSION_DURATION_MINUTES = 60
+const SESSION_DURATION_MINUTES = 45
 
 export async function POST(request: NextRequest) {
   try {
@@ -108,7 +108,32 @@ export async function POST(request: NextRequest) {
         .eq('status', 'queued')
 
       const queuePosition = (queuedSessions || 0) + 1
-      const estimatedWaitMinutes = queuePosition * 15 // 15 minutes per queue position
+      
+      // Calculate realistic estimated wait based on active session ages
+      const { data: activeSessions } = await supabase
+        .from('chat_sessions')
+        .select('created_at, expires_at')
+        .eq('status', 'active')
+        .order('expires_at', { ascending: true })
+
+      let estimatedWaitMinutes = 5 // Minimum wait
+      
+      if (activeSessions && activeSessions.length > 0) {
+        // Find when the earliest active session will expire
+        const now = new Date()
+        const earliestExpiry = new Date(activeSessions[0].expires_at)
+        const timeUntilSlot = Math.max(0, earliestExpiry.getTime() - now.getTime())
+        
+        // Calculate wait time: time until first slot + (queue position - 1) * average session duration
+        const averageSessionMinutes = 25 // Conservative estimate
+        estimatedWaitMinutes = Math.ceil(timeUntilSlot / (1000 * 60)) + ((queuePosition - 1) * averageSessionMinutes)
+        
+        // Cap at reasonable maximum
+        estimatedWaitMinutes = Math.min(estimatedWaitMinutes, 120)
+      } else {
+        // Should not happen since we're in the queue branch, but fallback
+        estimatedWaitMinutes = queuePosition * 10
+      }
 
       const { error } = await supabase
         .from('chat_sessions')
