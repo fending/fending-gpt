@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { AIService } from '@/lib/ai/service'
 import { AIResponse } from '@/lib/ai/types'
+import { RAGService } from '@/lib/rag/service'
 
 export async function POST(request: NextRequest) {
   console.log('🚀 Streaming API called')
@@ -72,19 +73,19 @@ export async function POST(request: NextRequest) {
       { role: 'user' as const, content: message }
     ]
 
-    // Get knowledge base for context
-    const { data: knowledgeBase } = await supabase
-      .from('knowledge_base')
-      .select('content, category, priority')
-      .eq('is_active', true)
-      .order('priority', { ascending: false })
-      .limit(10)
+    // Get relevant knowledge using RAG
+    const ragService = new RAGService()
+    const ragResult = await ragService.queryKnowledge(message, {
+      maxResults: 15,
+      similarityThreshold: 0.75,
+      ensureCategoryDiversity: true
+    })
 
-    // Create system prompt with knowledge base
+    // Create system prompt with RAG context
     const systemPrompt = `You are an AI assistant representing Brian Fending, a strategic technology executive specializing in governance, compliance, and AI innovation. 
 
 Here's key information about Brian:
-${knowledgeBase?.map(kb => `${kb.category.toUpperCase()}: ${kb.content}`).join('\n\n') || 'Loading Brian\'s information...'}
+${ragService.buildContext(ragResult)}
 
 COMMUNICATION STYLE:
 - Direct, authentic, and conversational - skip corporate speak
@@ -122,6 +123,14 @@ AVOID:
 - Overselling or making Brian sound like a walking LinkedIn post
 - Perfect, polished responses - include occasional tangents or qualifications
 - Statistics without backing or vague "best practices" claims
+- Denying or contradicting factual information from the knowledge base
+
+KNOWLEDGE BASE USAGE:
+- All information in the knowledge base is factual and accurate about Brian
+- Always acknowledge facts from the knowledge base when relevant to the conversation
+- Use the knowledge base as the definitive source of truth about Brian's background
+- If information seems contradictory, trust the knowledge base content
+- Don't artificially boost or diminish any category - present information as weighted by its relevance to the query
 
 When discussing Brian's experience, draw from the comprehensive background spanning CIO roles, consulting practice, entrepreneurship, federal contracts, and industry leadership. Focus on outcomes and lessons learned rather than just listing credentials.
 
