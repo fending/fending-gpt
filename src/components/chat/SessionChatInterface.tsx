@@ -186,6 +186,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
           onSendMessage={sendMessage} 
           disabled={sendingMessage}
           initialValue={lastMessage}
+          focusAfterSend={!sendingMessage}
         />
       </div>
     )
@@ -236,6 +237,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
         onSendMessage={sendMessage} 
         disabled={sendingMessage}
         initialValue={lastMessage}
+        focusAfterSend={!sendingMessage}
       />
     </div>
   )
