@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
 import ChatLoader from './ChatLoader'
+import StreamingMessage from './StreamingMessage'
 import { Loader2 } from 'lucide-react'
 
 interface SessionMessage {
@@ -28,6 +29,8 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
   const [sendingMessage, setSendingMessage] = useState(false)
   const [currentAbortController, setCurrentAbortController] = useState<AbortController | null>(null)
   const [lastMessage, setLastMessage] = useState('')
+  const [streamingMessage, setStreamingMessage] = useState<string>('')
+  const [isStreaming, setIsStreaming] = useState(false)
   const [sessionInfo, setSessionInfo] = useState<{
     sessionId: string
     status: string
@@ -78,19 +81,34 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, streamingMessage])
 
   const sendMessage = async (content: string) => {
     setSendingMessage(true)
     setLastMessage(content)
+    setStreamingMessage('')
+    setIsStreaming(true)
+    
+    // Add user message to conversation immediately
+    const userMessage: SessionMessage = {
+      id: `temp-${Date.now()}`, // Temporary ID
+      role: 'user',
+      content: content,
+      created_at: new Date().toISOString(),
+      tokens_used: null,
+      cost_usd: null,
+      confidence_score: null,
+      response_time_ms: null
+    }
+    setMessages(prev => [...prev, userMessage])
     
     // Create abort controller for this request
     const abortController = new AbortController()
     setCurrentAbortController(abortController)
     
     try {
-      // Send to session-based chat API
-      const response = await fetch('/api/chat', {
+      // Send to streaming chat API
+      const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,21 +125,95 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
         throw new Error(errorData.error || 'Failed to send message')
       }
 
-      await response.json()
+      // Handle streaming response
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
       
-      // Refresh messages to get the latest
-      await fetchMessages()
+      console.log('📡 Starting to read stream...')
       
-      // Clear the input after successful response
-      setLastMessage('')
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) {
+            console.log('📡 Stream reading complete')
+            break
+          }
+          
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (data.chunk) {
+                  console.log('📝 Received chunk:', data.chunk.length, 'chars')
+                  setStreamingMessage(prev => prev + data.chunk)
+                } else if (data.done) {
+                  // Stream complete
+                  console.log('✅ Streaming API succeeded')
+                  setIsStreaming(false)
+                  // Refresh messages to get the saved version
+                  await fetchMessages()
+                  setStreamingMessage('')
+                  // Clear the input after successful streaming response
+                  setLastMessage('')
+                } else if (data.error) {
+                  throw new Error(data.error)
+                }
+              } catch (parseError) {
+                console.warn('⚠️ Failed to parse stream data:', line, parseError)
+              }
+            }
+          }
+        }
+      } else {
+        console.error('❌ No response body reader available')
+      }
 
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         // Request was aborted, don't show error
         return
       }
-      console.error('Error sending message:', error)
-      alert('Failed to send message. Please try again.')
+      
+      console.error('Streaming API failed:', error)
+      console.log('🔄 Falling back to non-streaming API...')
+      setIsStreaming(false)
+      setStreamingMessage('')
+      
+      // Fallback to non-streaming API
+      try {
+        const fallbackResponse = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: content,
+            sessionToken,
+          }),
+          signal: abortController.signal
+        })
+
+        if (!fallbackResponse.ok) {
+          const errorData = await fallbackResponse.json()
+          throw new Error(errorData.error || 'Failed to send message')
+        }
+
+        await fallbackResponse.json()
+        console.log('✅ Fallback API succeeded')
+        
+        // Refresh messages to get the latest
+        await fetchMessages()
+        
+        // Clear the input after successful fallback response
+        setLastMessage('')
+        
+      } catch (fallbackError) {
+        console.error('❌ Fallback API also failed:', fallbackError)
+        alert('Failed to send message. Please try again.')
+      }
     } finally {
       setSendingMessage(false)
       setCurrentAbortController(null)
@@ -133,6 +225,8 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
       currentAbortController.abort()
       setCurrentAbortController(null)
       setSendingMessage(false)
+      setIsStreaming(false)
+      setStreamingMessage('')
     }
   }
 
@@ -175,11 +269,19 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
             </div>
           </div>
         </div>
-        {sendingMessage && (
+        {sendingMessage && !isStreaming && !streamingMessage && (
           <ChatLoader 
             onAbort={handleAbortMessage}
             onAbortComplete={handleAbortComplete}
             originalMessage={lastMessage}
+          />
+        )}
+        {(isStreaming || streamingMessage) && (
+          <StreamingMessage 
+            role="assistant"
+            content={streamingMessage}
+            isStreaming={isStreaming}
+            onStreamComplete={() => setIsStreaming(false)}
           />
         )}
         <ChatInput 
@@ -223,11 +325,19 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
               }} 
             />
           ))}
-          {sendingMessage && (
+          {sendingMessage && !isStreaming && !streamingMessage && (
             <ChatLoader 
               onAbort={handleAbortMessage}
               onAbortComplete={handleAbortComplete}
               originalMessage={lastMessage}
+            />
+          )}
+          {(isStreaming || streamingMessage) && (
+            <StreamingMessage 
+              role="assistant"
+              content={streamingMessage}
+              isStreaming={isStreaming}
+              onStreamComplete={() => setIsStreaming(false)}
             />
           )}
           <div ref={messagesEndRef} />

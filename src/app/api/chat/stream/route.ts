@@ -1,16 +1,17 @@
-// src/app/api/chat/route.ts
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { AIService } from '@/lib/ai/service'
+import { AIResponse } from '@/lib/ai/types'
 
 export async function POST(request: NextRequest) {
+  console.log('🚀 Streaming API called')
   try {
     const { message, sessionToken } = await request.json()
 
     if (!message || !sessionToken) {
-      return NextResponse.json(
-        { error: 'Message and session token are required' },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: 'Message and session token are required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
@@ -25,7 +26,10 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (sessionError || !session) {
-      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 })
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired session' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
     }
 
     // Update session activity
@@ -41,7 +45,10 @@ export async function POST(request: NextRequest) {
         .update({ status: 'expired' })
         .eq('id', session.id)
       
-      return NextResponse.json({ error: 'Session expired' }, { status: 401 })
+      return new Response(
+        JSON.stringify({ error: 'Session expired' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
     }
 
     // Get conversation history from session
@@ -53,9 +60,9 @@ export async function POST(request: NextRequest) {
 
     if (messagesError) {
       console.error('Error fetching messages:', messagesError)
-      return NextResponse.json(
-        { error: 'Failed to fetch conversation history' },
-        { status: 500 }
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch conversation history' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
@@ -124,55 +131,105 @@ You are Brian's AI assistant, not Brian himself. Always speak ABOUT Brian, not A
 
 Please provide helpful, accurate responses about Brian's background, experience, and qualifications. Keep responses professional and focused on career-related information, though if you do absolutely know a fact or related knowledge from the knowledge base, use it to keep the user engaged and then redirect them to professional conversation.`
 
-    // Create AI service and generate response
+    // Create AI service and generate streaming response
     const aiService = new AIService('claude')
-    const aiResponse = await aiService.generateResponse(aiMessages, {
-      systemPrompt,
-      maxTokens: 1000,
-      temperature: 0.7
-    })
+    const provider = aiService.getProvider()
 
-    // Save user message
+    if (!provider.generateStreamingResponse) {
+      return new Response(
+        JSON.stringify({ error: 'Streaming not supported by this provider' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const streamingMethod = provider.generateStreamingResponse
+
+    // Save user message first
     await supabase.from('chat_messages').insert({
       session_id: session.id,
       role: 'user',
       content: message,
     })
 
-    // Save assistant message with enhanced metadata
-    await supabase.from('chat_messages').insert({
-      session_id: session.id,
-      role: 'assistant',
-      content: aiResponse.response,
-      tokens_used: aiResponse.tokensUsed,
-      cost_usd: aiResponse.costUsd,
-      confidence_score: aiResponse.confidenceScore,
-      response_time_ms: aiResponse.responseTimeMs,
+    // Create streaming response
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const generator = streamingMethod.call(provider, aiMessages, {
+            systemPrompt,
+            maxTokens: 1000,
+            temperature: 0.7
+          })
+
+          let aiResponse: AIResponse | null = null
+          
+          for await (const chunk of generator) {
+            if (typeof chunk === 'string') {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ chunk })}\n\n`))
+            } else {
+              // Final response with metadata
+              aiResponse = chunk as AIResponse
+              break
+            }
+          }
+          
+          if (aiResponse) {
+            console.log('✅ Streaming completed successfully')
+            // Save assistant message with metadata
+            await supabase.from('chat_messages').insert({
+              session_id: session.id,
+              role: 'assistant',
+              content: aiResponse.response,
+              tokens_used: aiResponse.tokensUsed,
+              cost_usd: aiResponse.costUsd,
+              confidence_score: aiResponse.confidenceScore,
+              response_time_ms: aiResponse.responseTimeMs,
+            })
+
+            // Update session totals
+            await supabase
+              .from('chat_sessions')
+              .update({
+                total_cost_usd: session.total_cost_usd + aiResponse.costUsd,
+                total_tokens_used: session.total_tokens_used + aiResponse.tokensUsed,
+              })
+              .eq('id', session.id)
+
+            // Send final metadata
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 
+              done: true, 
+              metadata: {
+                tokensUsed: aiResponse.tokensUsed,
+                costUsd: aiResponse.costUsd,
+                confidenceScore: aiResponse.confidenceScore,
+                responseTimeMs: aiResponse.responseTimeMs,
+                provider: aiService.getProviderInfo()
+              }
+            })}\n\n`))
+          }
+          
+          controller.close()
+        } catch (error) {
+          console.error('❌ Error in streaming response:', error)
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`))
+          controller.close()
+        }
+      }
     })
 
-    // Update session totals
-    await supabase
-      .from('chat_sessions')
-      .update({
-        total_cost_usd: session.total_cost_usd + aiResponse.costUsd,
-        total_tokens_used: session.total_tokens_used + aiResponse.tokensUsed,
-      })
-      .eq('id', session.id)
-
-    return NextResponse.json({
-      response: aiResponse.response,
-      tokensUsed: aiResponse.tokensUsed,
-      costUsd: aiResponse.costUsd,
-      confidenceScore: aiResponse.confidenceScore,
-      responseTimeMs: aiResponse.responseTimeMs,
-      provider: aiService.getProviderInfo(),
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     })
 
   } catch (error) {
-    console.error('Error in chat API:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+    console.error('Error in streaming chat API:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
 }

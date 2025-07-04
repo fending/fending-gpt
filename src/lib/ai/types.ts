@@ -51,6 +51,11 @@ export interface AIProvider {
     options?: GenerationOptions
   ): Promise<AIResponse>
   
+  generateStreamingResponse?(
+    messages: ChatMessage[],
+    options?: GenerationOptions
+  ): AsyncGenerator<string, AIResponse>
+  
   estimateCost(messages: ChatMessage[]): Promise<number>
   
   validateConfig(): boolean

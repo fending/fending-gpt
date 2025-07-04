@@ -72,6 +72,66 @@ export class ClaudeProvider implements AIProvider {
     }
   }
 
+  async *generateStreamingResponse(
+    messages: ChatMessage[],
+    options?: GenerationOptions
+  ): AsyncGenerator<string, AIResponse> {
+    const startTime = Date.now()
+    let fullResponse = ''
+    
+    try {
+      const stream = await this.client.messages.create({
+        model: this.model,
+        max_tokens: options?.maxTokens || 4000,
+        temperature: options?.temperature || 0.7,
+        system: options?.systemPrompt,
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+        stop_sequences: options?.stopSequences,
+        stream: true,
+      })
+
+      let inputTokens = 0
+      let outputTokens = 0
+
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+          const text = chunk.delta.text
+          fullResponse += text
+          yield text
+        } else if (chunk.type === 'message_start') {
+          inputTokens = chunk.message.usage.input_tokens
+        } else if (chunk.type === 'message_delta') {
+          outputTokens = chunk.usage.output_tokens
+        }
+      }
+
+      const responseTime = Date.now() - startTime
+      const totalTokens = inputTokens + outputTokens
+      const costUsd = this.calculateCost(inputTokens, outputTokens)
+      const confidenceScore = this.calculateConfidenceScore(fullResponse, responseTime)
+
+      return {
+        response: fullResponse,
+        tokensUsed: totalTokens,
+        inputTokens,
+        outputTokens,
+        costUsd,
+        confidenceScore,
+        responseTimeMs: responseTime,
+        metadata: {
+          model: this.model,
+          provider: this.name,
+        }
+      }
+    } catch (error) {
+      console.error('Error calling Claude streaming API:', error)
+      throw error
+    }
+  }
+
   async estimateCost(messages: ChatMessage[]): Promise<number> {
     // Rough estimation: ~4 characters per token
     const totalChars = messages.reduce((sum, msg) => sum + msg.content.length, 0)
