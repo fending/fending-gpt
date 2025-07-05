@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin, extractSessionToken } from '@/lib/auth/middleware'
+import { OpenAIEmbeddingService } from '@/lib/embeddings/openai'
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +28,25 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Insert new knowledge base entry
+    // Generate embedding for the new entry
+    const embeddingService = new OpenAIEmbeddingService()
+    let embedding: number[] | null = null
+    
+    try {
+      const entryText = embeddingService.formatKnowledgeEntry({
+        category,
+        title,
+        content,
+        tags: tags || []
+      })
+      embedding = await embeddingService.generateEmbedding(entryText)
+      console.log(`✅ Generated embedding for new entry: ${category} - ${title}`)
+    } catch (embeddingError) {
+      console.error('Failed to generate embedding:', embeddingError)
+      // Continue without embedding - can be generated later
+    }
+
+    // Insert new knowledge base entry with embedding
     const { data: newEntry, error: insertError } = await supabase
       .from('knowledge_base')
       .insert({
@@ -38,7 +57,8 @@ export async function POST(request: NextRequest) {
         priority: priority || 3,
         source: source || 'manual',
         is_active: true,
-        confidence: 1.0
+        confidence: 1.0,
+        embedding: embedding
       })
       .select()
       .single()
@@ -49,7 +69,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      entry: newEntry 
+      entry: newEntry,
+      embeddingGenerated: embedding !== null
     })
 
   } catch (error) {
@@ -152,7 +173,25 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    // Update knowledge base entry
+    // Generate new embedding for the updated entry
+    const embeddingService = new OpenAIEmbeddingService()
+    let embedding: number[] | null = null
+    
+    try {
+      const entryText = embeddingService.formatKnowledgeEntry({
+        category,
+        title,
+        content,
+        tags: tags || []
+      })
+      embedding = await embeddingService.generateEmbedding(entryText)
+      console.log(`✅ Generated embedding for updated entry: ${category} - ${title}`)
+    } catch (embeddingError) {
+      console.error('Failed to generate embedding:', embeddingError)
+      // Continue without embedding - can be generated later
+    }
+
+    // Update knowledge base entry with new embedding
     const { data: updatedEntry, error: updateError } = await supabase
       .from('knowledge_base')
       .update({
@@ -161,7 +200,8 @@ export async function PUT(request: NextRequest) {
         content,
         tags: tags || [],
         priority: priority || 3,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        embedding: embedding
       })
       .eq('id', id)
       .select()
@@ -173,7 +213,8 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      entry: updatedEntry 
+      entry: updatedEntry,
+      embeddingGenerated: embedding !== null
     })
 
   } catch (error) {
