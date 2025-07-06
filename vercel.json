@@ -7,7 +7,7 @@
   "crons": [
     {
       "path": "/api/cron/garbage-collect",
-      "schedule": "* * * * *"
+      "schedule": "1 5 * * *"
     }
   ]
 }

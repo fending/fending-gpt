@@ -4,7 +4,7 @@ import { checkRateLimit, checkEmailSuppression, checkDisposableEmail, getClientI
 import { verifyRecaptcha } from '@/lib/security/recaptcha'
 import crypto from 'crypto'
 
-const MAX_CONCURRENT_SESSIONS = 50
+const MAX_CONCURRENT_SESSIONS = 100
 const SESSION_DURATION_MINUTES = 45
 
 export async function POST(request: NextRequest) {

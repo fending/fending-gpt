@@ -27,7 +27,7 @@ export async function GET() {
       sessionStats: {
         active: activeSessions || 0,
         queued: queuedSessions || 0,
-        maxConcurrent: 50
+        maxConcurrent: 100
       },
       database: 'connected'
     })

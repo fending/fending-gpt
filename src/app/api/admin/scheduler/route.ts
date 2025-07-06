@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         cronJobs: [
           {
             path: '/api/cron/garbage-collect',
-            schedule: '* * * * *', // Every minute
+            schedule: '1 5 * * *', // Daily at 12:01 AM ET (5:01 AM UTC)
             description: 'Session garbage collection and queue management'
           }
         ]

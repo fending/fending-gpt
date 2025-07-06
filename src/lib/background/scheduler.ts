@@ -100,7 +100,7 @@ class BackgroundScheduler {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active')
 
-      const MAX_CONCURRENT_SESSIONS = 50
+      const MAX_CONCURRENT_SESSIONS = 100
       const slotsAvailable = MAX_CONCURRENT_SESSIONS - (activeSessions || 0)
 
       if (slotsAvailable > 0) {

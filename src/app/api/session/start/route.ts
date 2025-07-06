@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { validateSession, extractSessionToken } from '@/lib/auth/middleware'
 import crypto from 'crypto'
 
-const MAX_CONCURRENT_SESSIONS = 50
+const MAX_CONCURRENT_SESSIONS = 100
 const MAX_QUEUE_SIZE = 20
 const SESSION_DURATION_MINUTES = 45
 
@@ -208,7 +208,7 @@ export async function GET(request: NextRequest) {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active')
 
-      const MAX_CONCURRENT_SESSIONS = 50
+      const MAX_CONCURRENT_SESSIONS = 100
       if ((activeSessions || 0) < MAX_CONCURRENT_SESSIONS) {
         // Activate this queued session
         const { error: updateError } = await supabase
