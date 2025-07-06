@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateSession, extractSessionToken } from '@/lib/auth/middleware'
-import { backgroundScheduler } from '@/lib/background/scheduler'
 
-// GET - Get scheduler status
+// GET - Get Vercel cron scheduler status
 export async function GET(request: NextRequest) {
   try {
     const token = extractSessionToken(request)
@@ -23,13 +22,21 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const status = backgroundScheduler.getStatus()
-    
     return NextResponse.json({
-      scheduler: status,
-      message: `Background scheduler is ${status.isRunning ? 'running' : 'stopped'}`,
+      scheduler: {
+        type: 'vercel-cron',
+        isRunning: true, // Vercel cron is always running when deployed
+        cronJobs: [
+          {
+            path: '/api/cron/garbage-collect',
+            schedule: '* * * * *', // Every minute
+            description: 'Session garbage collection and queue management'
+          }
+        ]
+      },
+      message: 'Vercel cron scheduler is managed automatically',
       environment: process.env.NODE_ENV,
-      autoStart: process.env.NODE_ENV === 'production'
+      cronSecret: process.env.CRON_SECRET ? 'configured' : 'missing'
     })
 
   } catch (error) {
@@ -41,7 +48,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Control scheduler (start/stop)
+// POST - Vercel cron cannot be controlled via API (returns info only)
 export async function POST(request: NextRequest) {
   try {
     const token = extractSessionToken(request)
@@ -62,31 +69,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { action } = await request.json()
-
-    if (!action || !['start', 'stop'].includes(action)) {
-      return NextResponse.json(
-        { error: 'Valid action required: "start" or "stop"' },
-        { status: 400 }
-      )
-    }
-
-    if (action === 'start') {
-      backgroundScheduler.start()
-      return NextResponse.json({
-        message: 'Background scheduler started',
-        status: backgroundScheduler.getStatus()
-      })
-    } else {
-      backgroundScheduler.stop()
-      return NextResponse.json({
-        message: 'Background scheduler stopped',
-        status: backgroundScheduler.getStatus()
-      })
-    }
+    return NextResponse.json({
+      message: 'Vercel cron jobs cannot be controlled via API. They are managed automatically by Vercel.',
+      info: 'Cron jobs are configured in vercel.json and run automatically when deployed.',
+      manualTrigger: {
+        endpoint: '/api/cron/garbage-collect',
+        method: 'GET',
+        requiresAuth: 'Bearer token with CRON_SECRET'
+      }
+    })
 
   } catch (error) {
-    console.error('Error controlling scheduler:', error)
+    console.error('Error in scheduler POST:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

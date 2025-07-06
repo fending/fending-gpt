@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server'
-import { backgroundScheduler } from '@/lib/background/scheduler'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET() {
   try {
-    const schedulerStatus = backgroundScheduler.getStatus()
-    
     // Quick database connectivity check
     const supabase = await createClient()
     const { count: activeSessions } = await supabase
@@ -22,10 +19,10 @@ export async function GET() {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV,
-      backgroundScheduler: {
-        running: schedulerStatus.isRunning,
-        jobCount: schedulerStatus.jobCount,
-        jobs: schedulerStatus.jobs
+      scheduler: {
+        type: 'vercel-cron',
+        running: true, // Vercel cron is managed automatically
+        cronSecret: process.env.CRON_SECRET ? 'configured' : 'missing'
       },
       sessionStats: {
         active: activeSessions || 0,

@@ -1,57 +1,10 @@
-import cron from 'node-cron'
 import { createClient } from '@/lib/supabase/server'
 
-// Background job manager for server-side scheduled tasks
+// Background job manager for Vercel cron-based scheduled tasks
 class BackgroundScheduler {
-  private jobs: Map<string, cron.ScheduledTask> = new Map()
-  private isRunning = false
+  // Static methods for individual job execution (called from Vercel cron endpoints)
 
-  start() {
-    if (this.isRunning) {
-      console.log('⚠️ Background scheduler already running')
-      return
-    }
-
-    console.log('🚀 Starting background scheduler...')
-    this.isRunning = true
-
-    // Session garbage collection - runs every 60 seconds
-    const sessionCleanupJob = cron.schedule('*/1 * * * *', async () => {
-      try {
-        await this.runSessionGarbageCollection()
-      } catch (error) {
-        console.error('❌ Session garbage collection job failed:', error)
-      }
-    }, {
-      scheduled: false, // Don't start immediately, we'll start it manually
-      timezone: 'UTC' // Use UTC to avoid timezone issues
-    })
-
-    this.jobs.set('session-cleanup', sessionCleanupJob)
-    sessionCleanupJob.start()
-
-    console.log('✅ Background scheduler started with session cleanup job (every 60 seconds)')
-  }
-
-  stop() {
-    if (!this.isRunning) {
-      return
-    }
-
-    console.log('🛑 Stopping background scheduler...')
-    
-    this.jobs.forEach((job, name) => {
-      job.stop()
-      job.destroy()
-      console.log(`  ❌ Stopped job: ${name}`)
-    })
-    
-    this.jobs.clear()
-    this.isRunning = false
-    console.log('✅ Background scheduler stopped')
-  }
-
-  private async runSessionGarbageCollection() {
+  static async runSessionGarbageCollection() {
     try {
       console.log('🗑️ Running session garbage collection...')
       const supabase = await createClient()
@@ -123,7 +76,7 @@ class BackgroundScheduler {
 
       // 3. Trigger queue management after cleanup (activate waiting sessions)
       if (totalExpired > 0) {
-        await this.triggerQueueManagement()
+        await BackgroundScheduler.triggerQueueManagement()
       }
       
       if (totalExpired > 0) {
@@ -137,7 +90,7 @@ class BackgroundScheduler {
     }
   }
 
-  private async triggerQueueManagement() {
+  static async triggerQueueManagement() {
     try {
       const supabase = await createClient()
 
@@ -201,23 +154,7 @@ class BackgroundScheduler {
     }
   }
 
-  // Get status of running jobs
-  getStatus() {
-    return {
-      isRunning: this.isRunning,
-      jobs: Array.from(this.jobs.keys()),
-      jobCount: this.jobs.size
-    }
-  }
 }
 
-// Singleton instance
-export const backgroundScheduler = new BackgroundScheduler()
-
-// Auto-start in production
-if (process.env.NODE_ENV === 'production') {
-  // Start scheduler after a brief delay to ensure server is ready
-  setTimeout(() => {
-    backgroundScheduler.start()
-  }, 5000) // 5 second delay
-}
+// Export the class for static method access
+export { BackgroundScheduler }

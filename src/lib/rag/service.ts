@@ -65,7 +65,7 @@ export class RAGService {
       let results = similarEntries || []
 
       console.log(`🎯 Vector search found ${results.length} entries above threshold:`)
-      results.slice(0, 3).forEach(entry => {
+      results.slice(0, 3).forEach((entry: KnowledgeEntry) => {
         console.log(`  - ${entry.category}: ${entry.title} (similarity: ${entry.similarity?.toFixed(3)})`)
       })
 
