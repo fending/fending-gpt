@@ -43,7 +43,7 @@ interface AIProvider {
 - **Session Analytics** with comprehensive tracking, cost monitoring, detailed dashboards, and four core analytics areas (A, B, C, D)
 - **Admin Dashboard** with Statistics, Users, Sessions, Training, Knowledge Base, and Suppression Management tabs
 - **Optimized Auth Middleware** with 5-minute caching reducing database calls by ~85% while maintaining security
-- **Smart Queue System** (5 concurrent, 20 max queue) with position tracking and estimated wait times
+- **Smart Queue System** (100 concurrent, 20 max queue) with position tracking and estimated wait times
 - **Bidirectional Navigation** between Chat and Admin interfaces with real-time admin privilege checking
 
 ### 🚧 Remaining Features (Nice-to-Have)
@@ -89,6 +89,7 @@ RECAPTCHA_SECRET_KEY=             # reCAPTCHA v3 secret key
 # Application
 NEXTAUTH_URL=                     # Base URL for email links
 NEXTAUTH_SECRET=                  # Session security (generate with openssl rand -base64 32)
+CRON_SECRET=                      # Vercel cron authentication secret
 ```
 
 ## Architecture Overview
@@ -189,6 +190,9 @@ components/
 **Security Webhooks**:
 - `POST /api/webhooks/postmark` - Handle email bounces and complaints
 
+**Vercel Cron Jobs**:
+- `GET /api/cron/garbage-collect` - Session cleanup and queue management (runs daily at 12:01 AM ET)
+
 ## Development Guidelines
 
 ### Working with Supabase
@@ -221,6 +225,14 @@ components/
 - **Admin Verification**: All admin routes verify `is_admin` status on every request
 - **Environment Security**: Sensitive keys handled via environment variables
 - **Input Validation**: All user-submitted content validated and sanitized
+
+### Vercel Cron Configuration
+- **Schedule**: Daily at 12:01 AM ET (5:01 AM UTC) - `1 5 * * *`
+- **Configuration**: Defined in `vercel.json` crons array
+- **Authentication**: Uses `CRON_SECRET` environment variable for security
+- **Hobby Plan Compatible**: Daily cron jobs are allowed on Vercel Hobby plans
+- **Session Limits**: Supports up to 100 concurrent sessions
+- **Manual Trigger**: Can be manually triggered via `/api/cron/garbage-collect` with proper authentication
 
 ### State Management
 - Local component state for UI interactions
@@ -270,7 +282,7 @@ components/
 
 3. **Cost Control & Queue Management**
    - Daily/monthly budget limits with automatic throttling
-   - Smart queue system (5 concurrent, 20 max queue)
+   - Smart queue system (100 concurrent, 20 max queue)
    - Real-time cost monitoring and alerts
    - Session lifecycle management
 
