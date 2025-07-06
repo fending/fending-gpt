@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if this session can be activated now
-    const MAX_CONCURRENT_SESSIONS = 10
+    const MAX_CONCURRENT_SESSIONS = 50
     const slotsAvailable = MAX_CONCURRENT_SESSIONS - (activeSessions || 0)
 
     if (slotsAvailable > 0 && currentPosition <= slotsAvailable) {

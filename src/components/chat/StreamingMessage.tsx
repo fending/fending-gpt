@@ -63,12 +63,19 @@ export default function StreamingMessage({
     }
   }, [content, currentIndex, isStreaming, role, onStreamComplete])
 
-  // Reset when content changes (new message)
+  // Reset when starting a new streaming message (but not on content updates during streaming)
   useEffect(() => {
-    setDisplayedContent('')
-    setCurrentIndex(0)
-    setShowCursor(false)
-  }, [content])
+    if (!isStreaming) {
+      setDisplayedContent(content)
+      setCurrentIndex(content.length)
+      setShowCursor(false)
+    } else if (currentIndex === 0 && content.length > 0) {
+      // Only reset at the start of a new streaming message
+      setDisplayedContent('')
+      setCurrentIndex(0)
+      setShowCursor(true)
+    }
+  }, [content, isStreaming, currentIndex])
 
   const isAssistant = role === 'assistant'
 

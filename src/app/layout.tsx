@@ -4,6 +4,11 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { ToastProvider } from "@/components/providers/toast-provider";
 import "./globals.css";
 
+// Initialize background jobs on server startup
+if (typeof window === 'undefined') {
+  import('@/lib/background/init')
+}
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

@@ -68,16 +68,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Prepare messages for AI (include the new user message)
+    // Limit conversation history to last 20 messages to prevent context overflow
+    const recentMessages = messages.slice(-20)
     const aiMessages = [
-      ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ...recentMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user' as const, content: message }
     ]
+
+    console.log(`🔍 Streaming context: ${aiMessages.length} messages, latest: "${message.slice(0, 50)}..."`)
+    console.log(`📚 RAG query: "${message.slice(0, 50)}..."`)
+    
 
     // Get relevant knowledge using RAG
     const ragService = new RAGService()
     const ragResult = await ragService.queryKnowledge(message, {
       maxResults: 15,
-      similarityThreshold: 0.75,
+      similarityThreshold: 0.6, // Lower threshold for better recall
       ensureCategoryDiversity: true
     })
 

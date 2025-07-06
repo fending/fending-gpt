@@ -64,12 +64,19 @@ export class RAGService {
 
       let results = similarEntries || []
 
+      console.log(`🎯 Vector search found ${results.length} entries above threshold:`)
+      results.slice(0, 3).forEach(entry => {
+        console.log(`  - ${entry.category}: ${entry.title} (similarity: ${entry.similarity?.toFixed(3)})`)
+      })
+
       // Apply category diversity if requested
       if (ensureCategoryDiversity && results.length > 0) {
         results = this.balanceByCategory(results, maxResults)
       } else {
         results = results.slice(0, maxResults)
       }
+
+      console.log(`✅ Final RAG results: ${results.length} entries`)
 
       return {
         entries: results,
@@ -155,6 +162,11 @@ export class RAGService {
         .limit(maxResults)
 
       if (error) throw error
+
+      console.log(`🔄 Fallback retrieved ${entries?.length || 0} entries:`)
+      entries?.slice(0, 3).forEach(entry => {
+        console.log(`  - ${entry.category}: ${entry.title} (priority: ${entry.priority})`)
+      })
 
       return {
         entries: entries || [],

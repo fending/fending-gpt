@@ -29,6 +29,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
   const [sendingMessage, setSendingMessage] = useState(false)
   const [currentAbortController, setCurrentAbortController] = useState<AbortController | null>(null)
   const [lastMessage, setLastMessage] = useState('')
+  const [abortMessage, setAbortMessage] = useState('')
   const [streamingMessage, setStreamingMessage] = useState<string>('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [sessionInfo, setSessionInfo] = useState<{
@@ -63,30 +64,41 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
         .eq('session_id', sessionData.sessionId)
         .order('created_at', { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Database error fetching messages:', error)
+        throw error
+      }
       
-      // Preserve any temporary messages (those with temp- IDs) that aren't in the database yet
+      console.log(`🔍 Database query returned ${data?.length || 0} messages for session ${sessionData.sessionId}`)
+      
+      // Always use database messages as the source of truth, only preserving temp messages that aren't persisted yet
       setMessages(prev => {
-        const tempMessages = prev.filter(msg => msg.id.startsWith('temp-'))
         const dbMessages = data || []
+        const tempMessages = prev.filter(msg => msg.id.startsWith('temp-'))
         
-        // If there are temp messages, merge them with DB messages, avoiding duplicates
+        console.log(`📥 Fetched ${dbMessages.length} messages from DB, ${tempMessages.length} temp messages`)
+        
+        // If there are temp messages, check if they've been persisted to DB
         if (tempMessages.length > 0) {
-          const allMessages = [...dbMessages]
-          tempMessages.forEach(tempMsg => {
-            // Only add temp message if there's no DB message with the same content and recent timestamp
-            const isDuplicate = dbMessages.some(dbMsg => 
-              dbMsg.content === tempMsg.content && 
+          const pendingTempMessages = tempMessages.filter(tempMsg => {
+            // Keep temp message only if there's no DB message with same content AND role from recent time
+            const isAlreadyPersisted = dbMessages.some(dbMsg => 
+              dbMsg.content.trim() === tempMsg.content.trim() && 
               dbMsg.role === tempMsg.role &&
-              Math.abs(new Date(dbMsg.created_at).getTime() - new Date(tempMsg.created_at).getTime()) < 5000 // Within 5 seconds
+              Math.abs(new Date(dbMsg.created_at).getTime() - new Date(tempMsg.created_at).getTime()) < 10000 // Within 10 seconds
             )
-            if (!isDuplicate) {
-              allMessages.push(tempMsg)
-            }
+            return !isAlreadyPersisted
           })
-          return allMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          
+          // Combine persisted messages with any pending temp messages
+          const allMessages = [...dbMessages, ...pendingTempMessages]
+          const sortedMessages = allMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          
+          console.log(`💬 Final: ${dbMessages.length} DB + ${pendingTempMessages.length} pending = ${sortedMessages.length} total`)
+          return sortedMessages
         }
         
+        console.log(`💬 Using DB messages only: ${dbMessages.length}`)
         return dbMessages
       })
     } catch (error) {
@@ -109,7 +121,8 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
 
   const sendMessage = async (content: string) => {
     setSendingMessage(true)
-    setLastMessage(content)
+    setLastMessage('') // Clear immediately for UX
+    setAbortMessage(content) // Store for abort functionality
     setStreamingMessage('')
     setIsStreaming(true)
     
@@ -177,11 +190,14 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
                   // Stream complete
                   console.log('✅ Streaming API succeeded')
                   setIsStreaming(false)
-                  // Refresh messages to get the saved version
-                  await fetchMessages()
                   setStreamingMessage('')
+                  // Add a small delay to ensure database write is complete before fetching
+                  setTimeout(async () => {
+                    await fetchMessages()
+                  }, 500)
                   // Clear the input after successful streaming response
                   setLastMessage('')
+                  setAbortMessage('')
                 } else if (data.error) {
                   throw new Error(data.error)
                 }
@@ -228,11 +244,14 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
         await fallbackResponse.json()
         console.log('✅ Fallback API succeeded')
         
-        // Refresh messages to get the latest
-        await fetchMessages()
+        // Add a small delay to ensure database write is complete before fetching
+        setTimeout(async () => {
+          await fetchMessages()
+        }, 500)
         
         // Clear the input after successful fallback response
         setLastMessage('')
+        setAbortMessage('')
         
       } catch (fallbackError) {
         console.error('❌ Fallback API also failed:', fallbackError)
@@ -255,11 +274,10 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
   }
 
   const handleAbortComplete = () => {
-    // Message will be repopulated via initialValue prop
-    // Clear the lastMessage after a brief delay so user can edit
-    setTimeout(() => {
-      setLastMessage('')
-    }, 100)
+    // Restore the aborted message to input so user can edit
+    setLastMessage(abortMessage)
+    // Clear abort message
+    setAbortMessage('')
   }
 
   if (loading) {
@@ -297,7 +315,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
           <ChatLoader 
             onAbort={handleAbortMessage}
             onAbortComplete={handleAbortComplete}
-            originalMessage={lastMessage}
+            originalMessage={abortMessage}
           />
         )}
         {(isStreaming || streamingMessage) && (
@@ -311,7 +329,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
         <ChatInput 
           onSendMessage={sendMessage} 
           disabled={sendingMessage}
-          initialValue={lastMessage}
+          initialValue={sendingMessage ? lastMessage : ''}
           focusAfterSend={!sendingMessage}
         />
       </div>

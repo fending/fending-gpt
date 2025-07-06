@@ -60,14 +60,89 @@ export async function POST() {
           const entry = batch[j]
           const embedding = embeddings[j]
 
-          const { error: updateError } = await supabase
+          console.log(`🔍 Embedding length: ${embedding.length}, first few values: [${embedding.slice(0, 3).join(', ')}...]`)
+          
+          // First, verify the row exists
+          const { data: existingRow, error: checkError } = await supabase
             .from('knowledge_base')
-            .update({ embedding })
+            .select('id, title')
             .eq('id', entry.id)
+            .single()
+          
+          if (checkError || !existingRow) {
+            console.error(`❌ Row ${entry.id} not found:`, checkError)
+            continue
+          }
+          
+          console.log(`✅ Row exists: ${existingRow.id} - ${existingRow.title}`)
+          
+          // First test: Can we update ANY field?
+          console.log(`🧪 Testing basic update capability for ${entry.id}`)
+          
+          const { data: testData, error: testError } = await supabase
+            .from('knowledge_base')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', entry.id)
+            .select('id, updated_at')
+
+          console.log(`🧪 Basic update test - Error:`, testError, `Data length:`, testData?.length || 0)
+          
+          if (!testData || testData.length === 0) {
+            console.error(`❌ Can't even update basic fields! WHERE clause or permissions issue.`)
+            continue
+          }
+          
+          // Now try the vector update
+          const vectorString = `[${embedding.join(',')}]`
+          console.log(`🔧 Updating ${entry.id} with vector string (${embedding.length} dimensions)`)
+          
+          const { data: updateData, error: updateError } = await supabase
+            .from('knowledge_base')
+            .update({ embedding: vectorString })
+            .eq('id', entry.id)
+            .select('id, embedding')
+
+          console.log(`🔧 Vector update - Error:`, updateError, `Data length:`, updateData?.length || 0)
 
           if (updateError) {
-            console.error(`Error updating entry ${entry.id}:`, updateError)
+            console.error(`❌ Update failed for ${entry.id}:`, updateError)
+            continue
+          }
+
+          if (!updateData || updateData.length === 0) {
+            console.error(`❌ No rows updated for ${entry.id} - this suggests the WHERE clause didn't match`)
+            
+            // Double-check the row still exists with exact same query
+            const { data: doubleCheck, error: checkError } = await supabase
+              .from('knowledge_base')
+              .select('id, title, embedding')
+              .eq('id', entry.id)
+              .single()
+            
+            console.log(`🔍 Double-check result:`, doubleCheck)
+            console.log(`🔍 Double-check error:`, checkError)
           } else {
+            console.log(`✅ Successfully updated ${entry.id}`)
+            console.log(`📊 Returned embedding type:`, typeof updateData[0]?.embedding)
+            console.log(`📊 Returned embedding value:`, updateData[0]?.embedding)
+            
+            // Verify the embedding was actually persisted
+            const { data: verifyData, error: verifyError } = await supabase
+              .from('knowledge_base')
+              .select('id, embedding')
+              .eq('id', entry.id)
+              .single()
+            
+            if (verifyError) {
+              console.error(`🔍 Verification query failed for ${entry.id}:`, verifyError)
+            } else {
+              console.log(`🔍 Verification - embedding in DB:`, verifyData.embedding ? 'POPULATED ✅' : 'NULL ❌')
+              console.log(`🔍 Verification - embedding type:`, typeof verifyData.embedding)
+              if (verifyData.embedding) {
+                console.log(`🔍 Verification - embedding length:`, Array.isArray(verifyData.embedding) ? verifyData.embedding.length : 'not array')
+              }
+            }
+            
             processed++
             console.log(`✅ Generated embedding for: ${entry.category} - ${entry.title}`)
           }
