@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 import { OpenAIEmbeddingService } from '@/lib/embeddings/openai'
 
 export async function POST() {
   try {
-    const supabase = await createClient()
+    // Use service role client to bypass RLS for admin operations
+    const supabase = createServiceRoleClient()
     const embeddingService = new OpenAIEmbeddingService()
 
     console.log('🚀 Starting knowledge base embedding generation...')
