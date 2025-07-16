@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 import { extractSessionToken } from '@/lib/auth/middleware'
 
 export async function POST(request: NextRequest) {
@@ -10,7 +10,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session token required' }, { status: 401 })
     }
 
-    const supabase = await createClient()
     const serviceSupabase = createServiceRoleClient()
 
     // Update last_activity_at for the session - use service role for write operation
