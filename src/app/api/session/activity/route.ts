@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { extractSessionToken } from '@/lib/auth/middleware'
 
 export async function POST(request: NextRequest) {
@@ -11,9 +11,10 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
+    const serviceSupabase = createServiceRoleClient()
 
-    // Update last_activity_at for the session
-    const { error } = await supabase
+    // Update last_activity_at for the session - use service role for write operation
+    const { error } = await serviceSupabase
       .from('chat_sessions')
       .update({ 
         last_activity_at: new Date().toISOString() 

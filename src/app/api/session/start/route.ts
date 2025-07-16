@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { validateSession, extractSessionToken } from '@/lib/auth/middleware'
 import crypto from 'crypto'
 
@@ -10,6 +10,7 @@ const SESSION_DURATION_MINUTES = 45
 // Helper function for queue updates
 async function triggerQueueUpdateHelper() {
   const supabase = await createClient()
+  const serviceSupabase = createServiceRoleClient()
   
   // Recalculate queue positions for remaining queued sessions
   const { data: remainingQueued } = await supabase
@@ -20,7 +21,7 @@ async function triggerQueueUpdateHelper() {
 
   if (remainingQueued && remainingQueued.length > 0) {
     for (let i = 0; i < remainingQueued.length; i++) {
-      await supabase
+      await serviceSupabase
         .from('chat_sessions')
         .update({ queue_position: i + 1 })
         .eq('id', remainingQueued[i].id)
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json()
     const supabase = await createClient()
+    const serviceSupabase = createServiceRoleClient()
 
     // Generate a secure session token
     const token = crypto.randomBytes(32).toString('hex')
@@ -44,8 +46,8 @@ export async function POST(request: NextRequest) {
       .eq('status', 'active')
 
     if (!activeSessions || activeSessions < MAX_CONCURRENT_SESSIONS) {
-      // Create active session immediately
-      const { data: session, error } = await supabase
+      // Create active session immediately - use service role for write
+      const { data: session, error } = await serviceSupabase
         .from('chat_sessions')
         .insert({
           email: email || null,
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
     const queuePosition = (queuedSessions || 0) + 1
     const estimatedWaitMinutes = queuePosition * 15 // Estimate 15 min per person
 
-    const { data: queuedSession, error: queueError } = await supabase
+    const { data: queuedSession, error: queueError } = await serviceSupabase
       .from('chat_sessions')
       .insert({
         email: email || null,

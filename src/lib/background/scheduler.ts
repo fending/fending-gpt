@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 
 // Background job manager for Vercel cron-based scheduled tasks
 class BackgroundScheduler {
@@ -8,6 +8,7 @@ class BackgroundScheduler {
     try {
       console.log('🗑️ Running session garbage collection...')
       const supabase = await createClient()
+      const serviceSupabase = createServiceRoleClient()
       const now = new Date()
       const nowISO = now.toISOString()
       
@@ -26,8 +27,8 @@ class BackgroundScheduler {
       let totalExpired = 0
 
       if (hardExpiredSessions && hardExpiredSessions.length > 0) {
-        // Mark hard expired sessions as expired
-        const { error: expireError } = await supabase
+        // Mark hard expired sessions as expired - use service role for write
+        const { error: expireError } = await serviceSupabase
           .from('chat_sessions')
           .update({ 
             status: 'expired',
@@ -56,8 +57,8 @@ class BackgroundScheduler {
       if (inactiveFetchError) {
         console.error('❌ Error fetching inactive sessions:', inactiveFetchError)
       } else if (inactiveSessions && inactiveSessions.length > 0) {
-        // Mark inactive sessions as expired
-        const { error: inactiveExpireError } = await supabase
+        // Mark inactive sessions as expired - use service role for write
+        const { error: inactiveExpireError } = await serviceSupabase
           .from('chat_sessions')
           .update({ 
             status: 'expired',
@@ -93,6 +94,7 @@ class BackgroundScheduler {
   static async triggerQueueManagement() {
     try {
       const supabase = await createClient()
+      const serviceSupabase = createServiceRoleClient()
 
       // Get current active sessions count
       const { count: activeSessions } = await supabase
@@ -118,9 +120,9 @@ class BackgroundScheduler {
         }
 
         if (queuedSessions && queuedSessions.length > 0) {
-          // Activate the first sessions in queue
+          // Activate the first sessions in queue - use service role for write
           for (const session of queuedSessions) {
-            await supabase
+            await serviceSupabase
               .from('chat_sessions')
               .update({ 
                 status: 'active',
@@ -141,7 +143,7 @@ class BackgroundScheduler {
 
           if (remainingQueued && remainingQueued.length > 0) {
             for (let i = 0; i < remainingQueued.length; i++) {
-              await supabase
+              await serviceSupabase
                 .from('chat_sessions')
                 .update({ queue_position: i + 1 })
                 .eq('id', remainingQueued[i].id)

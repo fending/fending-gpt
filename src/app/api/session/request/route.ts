@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { checkRateLimit, checkEmailSuppression, checkDisposableEmail, getClientIP } from '@/lib/security/rateLimiting'
 import { verifyRecaptcha } from '@/lib/security/recaptcha'
 import crypto from 'crypto'
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
+    const serviceSupabase = createServiceRoleClient()
 
     // Generate a secure session token
     const token = crypto.randomBytes(32).toString('hex')
@@ -81,8 +82,8 @@ export async function POST(request: NextRequest) {
       .eq('status', 'active')
 
     if (!activeSessions || activeSessions < MAX_CONCURRENT_SESSIONS) {
-      // Create active session
-      const { error } = await supabase
+      // Create active session - use service role for write operation
+      const { error } = await serviceSupabase
         .from('chat_sessions')
         .insert({
           email,
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
         estimatedWaitMinutes = queuePosition * 10
       }
 
-      const { error } = await supabase
+      const { error } = await serviceSupabase
         .from('chat_sessions')
         .insert({
           email,
