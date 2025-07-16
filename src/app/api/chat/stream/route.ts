@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { AIService } from '@/lib/ai/service'
 import { AIResponse } from '@/lib/ai/types'
 import { RAGService } from '@/lib/rag/service'
@@ -161,12 +161,21 @@ Please provide helpful, accurate responses about Brian's background, experience,
 
     const streamingMethod = provider.generateStreamingResponse
 
-    // Save user message first
-    await supabase.from('chat_messages').insert({
+    // Save user message first - use service role client to ensure it saves
+    const serviceSupabase = createServiceRoleClient()
+    const { error: userMessageError } = await serviceSupabase.from('chat_messages').insert({
       session_id: session.id,
       role: 'user',
       content: message,
     })
+    
+    if (userMessageError) {
+      console.error('❌ Failed to save user message:', userMessageError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to save user message' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
 
     // Create streaming response
     const stream = new ReadableStream({
@@ -192,8 +201,8 @@ Please provide helpful, accurate responses about Brian's background, experience,
           
           if (aiResponse) {
             console.log('✅ Streaming completed successfully')
-            // Save assistant message with metadata
-            await supabase.from('chat_messages').insert({
+            // Save assistant message with metadata - use service role client to ensure it saves
+            const { error: assistantMessageError } = await serviceSupabase.from('chat_messages').insert({
               session_id: session.id,
               role: 'assistant',
               content: aiResponse.response,
@@ -203,14 +212,26 @@ Please provide helpful, accurate responses about Brian's background, experience,
               response_time_ms: aiResponse.responseTimeMs,
             })
 
-            // Update session totals
-            await supabase
+            if (assistantMessageError) {
+              console.error('❌ Failed to save assistant message:', assistantMessageError)
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ error: 'Failed to save assistant message' })}\n\n`))
+              controller.close()
+              return
+            }
+
+            // Update session totals - use service role client
+            const { error: sessionUpdateError } = await serviceSupabase
               .from('chat_sessions')
               .update({
                 total_cost_usd: session.total_cost_usd + aiResponse.costUsd,
                 total_tokens_used: session.total_tokens_used + aiResponse.tokensUsed,
               })
               .eq('id', session.id)
+
+            if (sessionUpdateError) {
+              console.error('❌ Failed to update session totals:', sessionUpdateError)
+              // Continue anyway, message was saved
+            }
 
             // Send final metadata
             controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ 

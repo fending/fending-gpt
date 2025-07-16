@@ -1,6 +1,6 @@
 // src/app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { AIService } from '@/lib/ai/service'
 import { RAGService } from '@/lib/rag/service'
 
@@ -149,15 +149,26 @@ Please provide helpful, accurate responses about Brian's background, experience,
       temperature: 0.7
     })
 
+    // Use service role client to ensure messages are saved properly
+    const serviceSupabase = createServiceRoleClient()
+    
     // Save user message
-    await supabase.from('chat_messages').insert({
+    const { error: userMessageError } = await serviceSupabase.from('chat_messages').insert({
       session_id: session.id,
       role: 'user',
       content: message,
     })
+    
+    if (userMessageError) {
+      console.error('❌ Failed to save user message:', userMessageError)
+      return NextResponse.json(
+        { error: 'Failed to save user message' },
+        { status: 500 }
+      )
+    }
 
     // Save assistant message with enhanced metadata
-    await supabase.from('chat_messages').insert({
+    const { error: assistantMessageError } = await serviceSupabase.from('chat_messages').insert({
       session_id: session.id,
       role: 'assistant',
       content: aiResponse.response,
@@ -166,15 +177,28 @@ Please provide helpful, accurate responses about Brian's background, experience,
       confidence_score: aiResponse.confidenceScore,
       response_time_ms: aiResponse.responseTimeMs,
     })
+    
+    if (assistantMessageError) {
+      console.error('❌ Failed to save assistant message:', assistantMessageError)
+      return NextResponse.json(
+        { error: 'Failed to save assistant message' },
+        { status: 500 }
+      )
+    }
 
-    // Update session totals
-    await supabase
+    // Update session totals - use service role client
+    const { error: sessionUpdateError } = await serviceSupabase
       .from('chat_sessions')
       .update({
         total_cost_usd: session.total_cost_usd + aiResponse.costUsd,
         total_tokens_used: session.total_tokens_used + aiResponse.tokensUsed,
       })
       .eq('id', session.id)
+      
+    if (sessionUpdateError) {
+      console.error('❌ Failed to update session totals:', sessionUpdateError)
+      // Continue anyway, messages were saved
+    }
 
     return NextResponse.json({
       response: aiResponse.response,
