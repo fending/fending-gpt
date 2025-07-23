@@ -1,53 +1,30 @@
 # Database Migrations
 
-This directory contains incremental database changes that should be applied in chronological order.
+**All migrations have been consolidated into `../complete_schema.sql`.**
 
-## Migration History
+For new installations, use the complete schema file instead of individual migrations.
 
-| Migration | Description | Status |
-|-----------|-------------|--------|
-| `migration-add-ended-at.sql` | Adds `ended_at` field to `chat_sessions` table and updates status constraint to include 'ended' | ⏳ **Required** |
+## Status
 
-## How to Apply Migrations
+### ✅ All Migrations Consolidated
+All database changes are now included in `complete_schema.sql`:
+- ✅ `ended_at` field and status constraint updates
+- ✅ pgvector extension and embedding columns  
+- ✅ All security fixes and view corrections
+- ✅ Core tables, security tables, and functions
 
-1. **Check current database state** before applying any migration
-2. **Run migrations in order** (by filename/date)
-3. **Test functionality** after each migration
-4. **Mark as applied** in this README when complete
+### 🎯 Migration Directory Cleaned
+All files have been removed or relocated:
+- Migration files → Consolidated into `../complete_schema.sql`
+- Test files → Moved to `../test_queries/`
 
-## Migration: Add ended_at Field
+## For Existing Installations
 
-**File**: `migration-add-ended-at.sql`
-**Purpose**: Enables proper session lifecycle tracking for real-time queue management
+**Recommended approach**: Drop your current database and recreate with `complete_schema.sql` for a clean state.
 
-**What it does**:
-- Adds `ended_at TIMESTAMP WITH TIME ZONE` column to `chat_sessions`
-- Updates the status constraint to include 'ended' status
-- Required for session end tracking and queue progression
+**If you must preserve data**:
+1. Export your existing data
+2. Run `complete_schema.sql` to create clean schema  
+3. Import your data back
 
-**To apply**:
-```sql
--- Copy and paste contents of migration-add-ended-at.sql into Supabase SQL Editor
--- This migration is safe to run multiple times (uses IF NOT EXISTS)
-```
-
-**Verification**:
-```sql
--- Check that the field was added
-SELECT column_name, data_type 
-FROM information_schema.columns 
-WHERE table_name = 'chat_sessions' AND column_name = 'ended_at';
-
--- Check that the constraint was updated  
-SELECT constraint_name, check_clause 
-FROM information_schema.check_constraints 
-WHERE constraint_name = 'chat_sessions_status_check';
-```
-
-## Future Migrations
-
-When adding new migrations:
-1. **Name format**: `migration-YYYY-MM-DD-description.sql`
-2. **Add entry** to the table above
-3. **Include verification queries** in this README
-4. **Use IF NOT EXISTS** where possible for idempotency
+The individual migration approach is no longer supported since all changes have been consolidated.

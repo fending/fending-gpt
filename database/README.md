@@ -6,50 +6,51 @@ This directory contains all database schema files and migrations for the fending
 
 ```
 database/
-├── schema/          # Complete database schemas
-│   ├── schema.sql                # Original legacy schema
-│   ├── schema-sessions.sql       # Session-based chat schema (initial)
-│   ├── schema-sessions-fixed.sql # Session-based chat schema (corrected)
-│   └── schema-updates.sql        # Security and rate limiting tables
-└── migrations/      # Incremental database changes
-    └── migration-add-ended-at.sql # Adds ended_at field and status constraint
+├── complete_schema.sql  # 🚀 ONE-CLICK SETUP - Complete flattened schema
+├── functions/           # Database functions and procedures
+├── migrations/         # Now empty - all consolidated into complete_schema.sql
+└── test_queries/       # Development testing queries (includes RLS policy tests)
 ```
 
 ## Setup Instructions
 
-### For New Installations
+### For New Installations (Recommended)
 
-1. **Run the complete schema** (in Supabase SQL Editor):
-   ```sql
-   -- Run this file first for core session-based functionality
-   -- File: database/schema/schema-sessions-fixed.sql
-   ```
+**🚀 ONE-CLICK SETUP** - Run the complete flattened schema:
+```sql
+-- Complete database setup in one file
+-- File: database/complete_schema.sql
+```
 
-2. **Add security features** (in Supabase SQL Editor):
-   ```sql
-   -- Run this file for multi-layer security system
-   -- File: database/schema/schema-updates.sql
-   ```
+This single file consolidates everything that was previously scattered across multiple files:
+- Core session tables and chat functionality
+- Security tables (rate limiting, email suppression, etc.)
+- Vector embeddings with pgvector extension
+- All incremental fixes and updates
+- Optimized indexes and RLS policies
 
-3. **Apply latest migrations** (in Supabase SQL Editor):
-   ```sql
-   -- Run this file for real-time queue functionality
-   -- File: database/migrations/migration-add-ended-at.sql
-   ```
+**Includes:**
+- ✅ All core tables (sessions, messages, knowledge base, admin)
+- ✅ Security tables (rate limiting, email suppression, disposable domains)
+- ✅ Vector embeddings with pgvector extension
+- ✅ Optimized indexes and RLS policies
+- ✅ Analytics views with security fixes
+- ✅ Initial data and admin setup
+
+### 🧹 Cleanup Complete
+
+All individual schema and migration files have been removed since `complete_schema.sql` contains everything needed.
 
 ### For Existing Installations
 
-If you already have a database, only run the files you haven't applied yet:
+**Recommended**: Drop and recreate with `complete_schema.sql` for a clean state.
 
-- **Check if you have security tables**: `suppressed_emails`, `rate_limits`, `email_events`, `disposable_email_domains`
-  - If missing, run: `database/schema/schema-updates.sql`
+**If you must preserve data**:
+1. Export existing data  
+2. Run `complete_schema.sql` for clean schema
+3. Import data back
 
-- **Check if chat_sessions has ended_at field**:
-  ```sql
-  SELECT column_name FROM information_schema.columns 
-  WHERE table_name = 'chat_sessions' AND column_name = 'ended_at';
-  ```
-  - If missing, run: `database/migrations/migration-add-ended-at.sql`
+Individual migrations are no longer supported - everything is consolidated.
 
 ## Core Tables Created
 
