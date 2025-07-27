@@ -82,13 +82,24 @@ export async function POST(request: NextRequest) {
     console.log(`📚 RAG query: "${message.slice(0, 50)}..."`)
     
 
-    // Get relevant knowledge using RAG
-    const ragService = new RAGService()
-    const ragResult = await ragService.queryKnowledge(message, {
-      maxResults: 15,
-      similarityThreshold: 0.6, // Lower threshold for better recall
-      ensureCategoryDiversity: true
-    })
+    // Get relevant knowledge using RAG with error handling
+    let ragResult
+    let ragService
+    
+    try {
+      ragService = new RAGService()
+      ragResult = await ragService.queryKnowledge(message, {
+        maxResults: 15,
+        similarityThreshold: 0.6, // Lower threshold for better recall
+        ensureCategoryDiversity: true
+      })
+      console.log(`✅ RAG query successful, found ${ragResult.entries.length} entries`)
+    } catch (ragError) {
+      console.error('❌ RAG service failed, using fallback context:', ragError)
+      // Create fallback empty result
+      ragResult = { entries: [], totalRetrieved: 0, query: message }
+      ragService = new RAGService() // Still need service for buildContext
+    }
 
     // Create system prompt with RAG context
     const systemPrompt = `You are an AI assistant representing Brian Fending, a strategic technology executive specializing in governance, compliance, and AI innovation. 
@@ -181,20 +192,28 @@ Please provide helpful, accurate responses about Brian's background, experience,
 
           let aiResponse: AIResponse | null = null
           
-          for await (const chunk of generator) {
-            if (typeof chunk === 'string') {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ chunk })}\n\n`))
-            } else {
-              // Final response with metadata
-              aiResponse = chunk as AIResponse
+          // Use proper async generator handling
+          while (true) {
+            const { value, done } = await generator.next()
+            
+            if (done) {
+              // Generator completed, value is the final AIResponse
+              aiResponse = value as AIResponse
               break
+            } else {
+              // Generator yielded a string chunk
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ chunk: value })}\n\n`))
             }
           }
           
+          console.log(`🔍 Streaming generator completed: aiResponse=${!!aiResponse}`)
+          
           if (aiResponse) {
             console.log('✅ Streaming completed successfully')
+            console.log(`💾 Attempting to save assistant message: ${aiResponse.response.length} chars, ${aiResponse.tokensUsed} tokens, $${aiResponse.costUsd.toFixed(4)}`)
+            
             // Save assistant message with metadata - use service role client to ensure it saves
-            const { error: assistantMessageError } = await serviceSupabase.from('chat_messages').insert({
+            const { data: insertedMessage, error: assistantMessageError } = await serviceSupabase.from('chat_messages').insert({
               session_id: session.id,
               role: 'assistant',
               content: aiResponse.response,
@@ -202,7 +221,7 @@ Please provide helpful, accurate responses about Brian's background, experience,
               cost_usd: aiResponse.costUsd,
               confidence_score: aiResponse.confidenceScore,
               response_time_ms: aiResponse.responseTimeMs,
-            })
+            }).select()
 
             if (assistantMessageError) {
               console.error('❌ Failed to save assistant message:', assistantMessageError)
@@ -210,6 +229,8 @@ Please provide helpful, accurate responses about Brian's background, experience,
               controller.close()
               return
             }
+            
+            console.log(`✅ Assistant message saved successfully:`, insertedMessage?.[0]?.id)
 
             // Update session totals - use service role client
             const { error: sessionUpdateError } = await serviceSupabase

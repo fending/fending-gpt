@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 import { OpenAIEmbeddingService } from '@/lib/embeddings/openai'
 
 export interface KnowledgeEntry {
@@ -45,7 +45,7 @@ export class RAGService {
       // Generate embedding for user query
       const queryEmbedding = await this.embeddingService.generateEmbedding(userQuery)
       
-      const supabase = await createClient()
+      const supabase = createServiceRoleClient()
 
       // Perform vector similarity search
       const { data: similarEntries, error } = await supabase.rpc(
@@ -152,7 +152,7 @@ export class RAGService {
    */
   private async fallbackQuery(maxResults: number): Promise<RAGResult> {
     try {
-      const supabase = await createClient()
+      const supabase = createServiceRoleClient()
       
       const { data: entries, error } = await supabase
         .from('knowledge_base')

@@ -143,11 +143,14 @@ export class ClaudeProvider implements AIProvider {
           yield text
         } else if (chunk.type === 'message_start') {
           inputTokens = chunk.message.usage.input_tokens
-        } else if (chunk.type === 'message_delta') {
+        } else if (chunk.type === 'message_delta' && chunk.usage) {
           outputTokens = chunk.usage.output_tokens
+        } else if (chunk.type === 'message_stop') {
+          // Stream has ended
+          console.log(`🏁 Claude stream ended for ${this.modelType}`)
         }
       }
-
+      
       const responseTime = Date.now() - startTime
       const totalTokens = inputTokens + outputTokens
       const costUsd = this.calculateCost(inputTokens, outputTokens)

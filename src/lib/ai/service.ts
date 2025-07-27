@@ -100,7 +100,17 @@ export class AIService {
       // Fallback to default provider streaming
       const provider = this.getProvider()
       if (provider.generateStreamingResponse) {
-        return yield* provider.generateStreamingResponse(messages, options)
+        const generator = provider.generateStreamingResponse(messages, options)
+        
+        while (true) {
+          const { value, done } = await generator.next()
+          
+          if (done) {
+            return value as AIResponse & { modelAnalysis?: { queryComplexity: string; recommendedModel: string; confidence: number; reasoning: string[]; modelUsed: string } }
+          } else {
+            yield value as string
+          }
+        }
       }
       throw new Error('Streaming not supported by provider')
     }
@@ -121,39 +131,82 @@ export class AIService {
         throw new Error('Smart provider does not support streaming')
       }
 
-      // Stream the response
-      for await (const chunk of smartProvider.generateStreamingResponse(messages, options)) {
-        if (typeof chunk === 'string') {
-          yield chunk
-        } else {
-          // Final response with metadata
-          const finalResponse = chunk as AIResponse
-          AIProviderFactory.updateMetrics(smartInstanceId, finalResponse, false)
+      // Stream the response using proper async generator handling
+      let chunkCount = 0
+      const generator = smartProvider.generateStreamingResponse(messages, options)
+      
+      try {
+        // Yield all string chunks
+        while (true) {
+          const { value, done } = await generator.next()
           
-          return {
-            ...finalResponse,
-            modelAnalysis: {
-              queryComplexity: analysis.complexity,
-              recommendedModel,
-              confidence: analysis.confidence,
-              reasoning: analysis.reasoning,
-              modelUsed: recommendedModel
-            }
-          } as AIResponse & { modelAnalysis?: { queryComplexity: string; recommendedModel: string; confidence: number; reasoning: string[]; modelUsed: string } }
+          if (done) {
+            // Generator completed, value is the final AIResponse
+            const finalResponse = value as AIResponse
+            console.log(`✅ Received final response from ${recommendedModel} after ${chunkCount} chunks`)
+            AIProviderFactory.updateMetrics(smartInstanceId, finalResponse, false)
+            
+            return {
+              ...finalResponse,
+              modelAnalysis: {
+                queryComplexity: analysis.complexity,
+                recommendedModel,
+                confidence: analysis.confidence,
+                reasoning: analysis.reasoning,
+                modelUsed: recommendedModel
+              }
+            } as AIResponse & { modelAnalysis?: { queryComplexity: string; recommendedModel: string; confidence: number; reasoning: string[]; modelUsed: string } }
+          } else {
+            // Generator yielded a string chunk
+            chunkCount++
+            yield value as string
+          }
         }
+      } catch (generatorError) {
+        console.error(`❌ Generator error for ${recommendedModel}:`, generatorError)
+        throw generatorError
       }
     } catch (error) {
-      console.warn(`Smart streaming model ${recommendedModel} failed, falling back to default`)
+      console.warn(`Smart streaming model ${recommendedModel} failed, falling back to default:`, error)
       // Fallback to default provider
       const provider = this.getProvider()
       if (provider.generateStreamingResponse) {
-        return yield* provider.generateStreamingResponse(messages, options)
+        console.log(`🔄 Attempting fallback to default provider (${provider.model})`)
+        let fallbackChunkCount = 0
+        const fallbackGenerator = provider.generateStreamingResponse(messages, options)
+        
+        try {
+          while (true) {
+            const { value, done } = await fallbackGenerator.next()
+            
+            if (done) {
+              // Fallback generator completed, value is the final AIResponse
+              const fallbackResponse = value as AIResponse
+              console.log(`✅ Received fallback response after ${fallbackChunkCount} chunks`)
+              
+              return {
+                ...fallbackResponse,
+                modelAnalysis: {
+                  queryComplexity: analysis.complexity,
+                  recommendedModel,
+                  confidence: analysis.confidence,
+                  reasoning: [...analysis.reasoning, 'Fallback to default after smart model failed'],
+                  modelUsed: 'claude-3-5-sonnet-20241022' // Default fallback model
+                }
+              } as AIResponse & { modelAnalysis?: { queryComplexity: string; recommendedModel: string; confidence: number; reasoning: string[]; modelUsed: string } }
+            } else {
+              // Fallback generator yielded a string chunk
+              fallbackChunkCount++
+              yield value as string
+            }
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback provider also failed:', fallbackError)
+          throw fallbackError
+        }
       }
       throw error
     }
-    
-    // This should never be reached, but TypeScript requires it
-    throw new Error('Unexpected end of streaming response')
   }
 
   async estimateCost(messages: ChatMessage[]): Promise<number> {

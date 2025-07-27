@@ -61,14 +61,22 @@ export async function GET(request: NextRequest) {
     }> = []
     
     sessions?.forEach(session => {
-      const messages = session.chat_messages || []
+      const messages = (session.chat_messages || []).sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+      
+      console.log(`🔍 Session ${session.id}: ${messages.length} messages`)
+      console.log(`📝 Message roles: ${messages.map(m => m.role).join(', ')}`)
       
       // Group messages into conversation pairs
       for (let i = 0; i < messages.length - 1; i += 2) {
         const userMessage = messages[i]
         const aiMessage = messages[i + 1]
         
+        console.log(`👥 Pairing attempt ${i}: user=${userMessage?.role}, ai=${aiMessage?.role}`)
+        
         if (userMessage?.role === 'user' && aiMessage?.role === 'assistant') {
+          console.log(`✅ Valid conversation pair found for session ${session.id}`)
           conversations.push({
             id: `${session.id}-${userMessage.id}`,
             session_id: session.id,
@@ -83,6 +91,8 @@ export async function GET(request: NextRequest) {
             is_approved: false,
             admin_notes: null
           })
+        } else {
+          console.log(`❌ Invalid pair for session ${session.id}: user=${userMessage?.role}, ai=${aiMessage?.role}`)
         }
       }
     })
@@ -107,6 +117,15 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    console.log(`📊 Total conversations found: ${conversations.length}`)
+    console.log(`📋 Recent conversations:`, conversations.slice(0, 3).map(c => ({
+      id: c.id,
+      email: c.email,
+      user_message: c.user_message.slice(0, 50) + '...',
+      ai_response: c.ai_response.slice(0, 50) + '...',
+      created_at: c.created_at
+    })))
+    
     return NextResponse.json(conversations)
 
   } catch (error) {

@@ -45,6 +45,8 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
       const response = await fetch(`/api/admin/training?token=${sessionToken}`)
       if (!response.ok) throw new Error('Failed to fetch conversations')
       const data = await response.json()
+      console.log('🎯 Frontend received conversations:', data.length)
+      console.log('📋 First 3 conversations:', data.slice(0, 3))
       setConversations(data)
     } catch (error) {
       console.error('Error fetching conversations:', error)

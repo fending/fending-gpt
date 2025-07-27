@@ -75,13 +75,24 @@ export async function POST(request: NextRequest) {
     console.log(`📚 RAG query: "${message.slice(0, 50)}..."`)
     
 
-    // Get relevant knowledge using RAG
-    const ragService = new RAGService()
-    const ragResult = await ragService.queryKnowledge(message, {
-      maxResults: 15,
-      similarityThreshold: 0.6, // Lower threshold for better recall
-      ensureCategoryDiversity: true
-    })
+    // Get relevant knowledge using RAG with error handling
+    let ragResult
+    let ragService
+    
+    try {
+      ragService = new RAGService()
+      ragResult = await ragService.queryKnowledge(message, {
+        maxResults: 15,
+        similarityThreshold: 0.6, // Lower threshold for better recall
+        ensureCategoryDiversity: true
+      })
+      console.log(`✅ RAG query successful, found ${ragResult.entries.length} entries`)
+    } catch (ragError) {
+      console.error('❌ RAG service failed, using fallback context:', ragError)
+      // Create fallback empty result
+      ragResult = { entries: [], totalRetrieved: 0, query: message }
+      ragService = new RAGService() // Still need service for buildContext
+    }
 
     // Create system prompt with RAG context
     const systemPrompt = `You are an AI assistant representing Brian Fending, a strategic technology executive specializing in governance, compliance, and AI innovation. 
