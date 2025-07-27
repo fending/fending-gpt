@@ -377,6 +377,10 @@ CREATE POLICY "Admins can access training conversations" ON training_conversatio
         )
     );
 
+-- Service role full access for training conversations (required for admin API operations)
+CREATE POLICY "Service role full access training_conversations" ON training_conversations
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
 DROP POLICY IF EXISTS "Admins can access daily budgets" ON daily_budgets;
 CREATE POLICY "Admins can access daily budgets" ON daily_budgets
     FOR ALL USING (
