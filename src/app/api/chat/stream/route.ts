@@ -33,15 +33,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Use service role client for database operations  
+    const serviceSupabase = createServiceRoleClient()
+    
     // Update session activity
-    await supabase
+    await serviceSupabase
       .from('chat_sessions')
       .update({ last_activity_at: new Date().toISOString() })
       .eq('token', sessionToken)
 
     // Check if session is expired
     if (new Date(session.expires_at) < new Date()) {
-      await supabase
+      await serviceSupabase
         .from('chat_sessions')
         .update({ status: 'expired' })
         .eq('id', session.id)
@@ -151,8 +154,7 @@ Please provide helpful, accurate responses about Brian's background, experience,
     // Create AI service and generate streaming response with smart model selection
     const aiService = new AIService('claude')
 
-    // Save user message first - use service role client to ensure it saves
-    const serviceSupabase = createServiceRoleClient()
+    // Save user message first - serviceSupabase already created above
     const { error: userMessageError } = await serviceSupabase.from('chat_messages').insert({
       session_id: session.id,
       role: 'user',
