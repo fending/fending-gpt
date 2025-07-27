@@ -203,6 +203,7 @@ function EmailCollectionForm({
         <div className="mt-6 text-xs text-gray-400 text-center">
           <p>Direct access to Brian&apos;s professional information</p>
           <p>Secure • No spam • <strong><a href="https://www.brianfending.com/contact">Questions?</a></strong></p>
+          <p><a href="/privacy" className="text-blue-500 hover:text-blue-600 underline">Privacy Policy</a></p>
         </div>
       </div>
     </div>

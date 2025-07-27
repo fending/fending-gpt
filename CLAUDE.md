@@ -65,7 +65,7 @@ npm run lint         # Run ESLint and type checking
 ```bash
 # Apply comprehensive schema to Supabase project
 # See database/README.md for complete setup instructions
-# Run files in order: schema-sessions-fixed.sql → schema-updates.sql → migration-add-ended-at.sql
+# Apply database/complete_schema.sql in Supabase SQL editor
 # Creates core tables: chat_sessions, chat_messages, knowledge_base, training_conversations, daily_budgets, admin_users
 # Creates security tables: suppressed_emails, rate_limits, email_events, disposable_email_domains
 # Includes RLS policies and optimized indexes
@@ -90,6 +90,11 @@ RECAPTCHA_SECRET_KEY=             # reCAPTCHA v3 secret key
 NEXTAUTH_URL=                     # Base URL for email links
 NEXTAUTH_SECRET=                  # Session security (generate with openssl rand -base64 32)
 CRON_SECRET=                      # Vercel cron authentication secret
+
+# Additional Services
+OPENAI_API_KEY=                   # OpenAI API key for embeddings
+ADMIN_EMAIL=                      # Admin email address
+NEXT_PUBLIC_SITE_URL=             # Public site URL
 ```
 
 ## Architecture Overview
