@@ -35,6 +35,23 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const serviceSupabase = createServiceRoleClient()
 
+    // Clean up any existing sessions for this email before creating a new one
+    if (email) {
+      const { error: cleanupError } = await serviceSupabase
+        .from('chat_sessions')
+        .update({ 
+          status: 'expired',
+          ended_at: new Date().toISOString()
+        })
+        .eq('email', email.toLowerCase())
+        .in('status', ['active', 'pending', 'queued'])
+
+      if (cleanupError) {
+        console.error('Error cleaning up existing sessions for email:', cleanupError)
+        // Continue anyway - cleanup failure shouldn't prevent new session creation
+      }
+    }
+
     // Generate a secure session token
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + SESSION_DURATION_MINUTES * 60 * 1000)
