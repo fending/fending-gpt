@@ -160,8 +160,8 @@ export async function GET(request: NextRequest) {
 
     // If session is pending, activate it (when user clicks email link)
     if (session!.status === 'pending') {
-      const supabase = await createClient()
-      const { error: updateError } = await supabase
+      const serviceSupabase = createServiceRoleClient()
+      const { error: updateError } = await serviceSupabase
         .from('chat_sessions')
         .update({ 
           status: 'active',
@@ -189,6 +189,7 @@ export async function GET(request: NextRequest) {
     // If session is queued, check if it can be activated
     if (session!.status === 'queued') {
       const supabase = await createClient()
+      const serviceSupabase = createServiceRoleClient()
       
       // Get full session details including queue_position
       const { data: fullSession, error: fullSessionError } = await supabase
@@ -213,7 +214,7 @@ export async function GET(request: NextRequest) {
       const MAX_CONCURRENT_SESSIONS = 100
       if ((activeSessions || 0) < MAX_CONCURRENT_SESSIONS) {
         // Activate this queued session
-        const { error: updateError } = await supabase
+        const { error: updateError } = await serviceSupabase
           .from('chat_sessions')
           .update({ 
             status: 'active',

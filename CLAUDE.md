@@ -341,3 +341,6 @@ components/
 3. Update TypeScript types to match schema
 4. Add appropriate RLS policies for new tables
 5. Update relevant components and API routes
+
+### Memory Log
+- **5 already existed, all others have been run. please update complete_schema**

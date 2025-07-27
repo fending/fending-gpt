@@ -391,6 +391,40 @@ CREATE POLICY "Admins can access daily budgets" ON daily_budgets
     );
 
 -- ========================================
+-- SERVICE ROLE POLICIES - Core Tables
+-- ========================================
+
+-- Service role full access for core admin operations
+-- 1. chat_sessions - Critical for admin training, stats, sessions, users, and garbage collection routes
+CREATE POLICY "Service role full access chat_sessions" ON chat_sessions
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
+-- 2. chat_messages - Critical for admin training and stats routes  
+CREATE POLICY "Service role full access chat_messages" ON chat_messages
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
+-- 3. knowledge_base - Critical for admin knowledge management routes
+CREATE POLICY "Service role full access knowledge_base" ON knowledge_base
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
+-- 4. daily_budgets - Critical for admin budget tracking and stats
+CREATE POLICY "Service role full access daily_budgets" ON daily_budgets
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
+-- 5. admin_users - Critical for all admin authentication
+CREATE POLICY "Service role full access admin_users" ON admin_users
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
+-- Optional: Admin JWT policy for admin_users (if direct admin user management is needed)
+CREATE POLICY "Admins can manage admin_users" ON admin_users
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM admin_users
+            WHERE admin_users.email = current_setting('request.jwt.claims', true)::json->>'email'
+        )
+    );
+
+-- ========================================
 -- RLS POLICIES - Security Tables
 -- ========================================
 
