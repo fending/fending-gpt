@@ -1,5 +1,4 @@
 import { Metadata, Viewport } from 'next'
-import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy - AI Assistant',
@@ -24,7 +23,7 @@ export default function PrivacyPolicyPage() {
       <div className="prose dark:prose-invert max-w-none">
         <h2>Service Overview</h2>
         <p>
-          This Privacy Policy applies specifically to the AI Assistant service at <strong>ai.brianfending.com</strong>, a session-based AI chat application designed to provide information about Brian Fending's professional background and experience.
+          This Privacy Policy applies specifically to the AI Assistant service at <strong>ai.brianfending.com</strong>, a session-based AI chat application designed to provide information about Brian Fending&apos;s professional background and experience.
         </p>
 
         <h2>Contact Information</h2>
@@ -67,7 +66,7 @@ export default function PrivacyPolicyPage() {
 
         <h3>Primary Service Functions</h3>
         <ul>
-          <li><strong>AI responses:</strong> Providing personalized information about Brian Fending's professional background</li>
+          <li><strong>AI responses:</strong> Providing personalized information about Brian Fending&apos;s professional background</li>
           <li><strong>Session management:</strong> Operating queue system, managing 60-minute session limits</li>
           <li><strong>Access control:</strong> Email-based authentication and session notifications</li>
           <li><strong>Queue management:</strong> Position tracking, wait time estimates, capacity control</li>
@@ -246,7 +245,7 @@ export default function PrivacyPolicyPage() {
 
         <h3>Universal Rights (All Users)</h3>
         <ul>
-          <li><strong>Information access:</strong> Know what personal information we collect and how it's used</li>
+          <li><strong>Information access:</strong> Know what personal information we collect and how it&apos;s used</li>
           <li><strong>Data access:</strong> Request access to your personal information</li>
           <li><strong>Correction rights:</strong> Request correction of inaccurate information</li>
           <li><strong>Limited deletion:</strong> Request deletion of your email address and session metadata</li>
@@ -266,7 +265,7 @@ export default function PrivacyPolicyPage() {
         <ul>
           <li><strong>Right to know:</strong> Categories and specific pieces of personal information collected</li>
           <li><strong>Right to delete:</strong> Limited deletion rights (see limitations below)</li>
-          <li><strong>Right to opt-out:</strong> We don't sell personal information</li>
+          <li><strong>Right to opt-out:</strong> We don&apos;t sell personal information</li>
           <li><strong>Right to non-discrimination:</strong> Equal service regardless of privacy choices</li>
         </ul>
 
@@ -297,7 +296,7 @@ export default function PrivacyPolicyPage() {
 
         <h3>AI Training and Model Development</h3>
         <ul>
-          <li><strong>Training data integration:</strong> Your conversations become part of the AI's training dataset</li>
+          <li><strong>Training data integration:</strong> Your conversations become part of the AI&apos;s training dataset</li>
           <li><strong>Model improvement:</strong> Your interactions help improve response quality for all users</li>
           <li><strong>Knowledge extraction:</strong> Information from conversations may be extracted into structured knowledge bases</li>
           <li><strong>Pattern analysis:</strong> Conversation patterns inform AI development and optimization</li>
@@ -313,9 +312,9 @@ export default function PrivacyPolicyPage() {
 
         <h3>Data Flow to AI Providers</h3>
         <ul>
-          <li><strong>API processing:</strong> Your messages are sent to Anthropic's Claude API for processing</li>
+          <li><strong>API processing:</strong> Your messages are sent to Anthropic&apos;s Claude API for processing</li>
           <li><strong>Context sharing:</strong> Conversation history and knowledge base context are included in API calls</li>
-          <li><strong>Third-party policies:</strong> Anthropic's data usage policies also apply to your interactions</li>
+          <li><strong>Third-party policies:</strong> Anthropic&apos;s data usage policies also apply to your interactions</li>
           <li><strong>Provider changes:</strong> We may change AI providers, and your data may be processed by different systems</li>
         </ul>
 
@@ -384,7 +383,7 @@ export default function PrivacyPolicyPage() {
           <li>Your full name and email address used with the service</li>
           <li>Specific right you wish to exercise</li>
           <li>Approximate dates of service usage</li>
-          <li>Any specific conversations or sessions you're referencing</li>
+          <li>Any specific conversations or sessions you&apos;re referencing</li>
         </ul>
 
         <h3>Request Processing</h3>
@@ -407,13 +406,13 @@ export default function PrivacyPolicyPage() {
 
         <h3>Service Availability</h3>
         <ul>
-          <li><strong>No guarantees:</strong> Service provided "as is" without availability warranties</li>
+          <li><strong>No guarantees:</strong> Service provided &quot;as is&quot; without availability warranties</li>
           <li><strong>Feature changes:</strong> Service features may be modified or discontinued</li>
           <li><strong>Capacity limits:</strong> Access may be restricted during high demand</li>
           <li><strong>Maintenance downtime:</strong> Scheduled and emergency maintenance may interrupt service</li>
         </ul>
 
-        <h2>Children's Privacy</h2>
+        <h2>Children&apos;s Privacy</h2>
         <p>
           This service is not intended for users under 16 years of age. We do not knowingly collect personal information from children. If we become aware that a child has provided personal information, we will delete it promptly.
         </p>
@@ -437,24 +436,24 @@ export default function PrivacyPolicyPage() {
         <h2>Regulatory Contacts</h2>
 
         <h3>Filing Complaints</h3>
-        <p>If your privacy concerns aren't adequately addressed, you may contact:</p>
+        <p>If your privacy concerns aren&apos;t adequately addressed, you may contact:</p>
 
         <p><strong>EU/UK Residents:</strong></p>
         <ul>
           <li>Your local data protection authority</li>
-          <li>UK: Information Commissioner's Office (ICO) - <a href="https://ico.org.uk" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400">https://ico.org.uk</a></li>
+          <li>UK: Information Commissioner&apos;s Office (ICO) - <a href="https://ico.org.uk" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400">https://ico.org.uk</a></li>
         </ul>
 
         <p><strong>California Residents:</strong></p>
         <ul>
-          <li>California Attorney General's Office - privacy@oag.ca.gov</li>
+          <li>California Attorney General&apos;s Office - privacy@oag.ca.gov</li>
         </ul>
 
         <h2>Contact Information</h2>
         <p>For all privacy-related questions or requests:</p>
         <p>
           <strong>Email:</strong> hello@brianfending.com<br />
-          <strong>Subject Line:</strong> "Privacy Request - AI Assistant"
+          <strong>Subject Line:</strong> &quot;Privacy Request - AI Assistant&quot;
         </p>
 
         <p>

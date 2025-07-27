@@ -10,6 +10,7 @@ A production-ready session-based AI chat application designed to provide informa
 - 🔒 **Multi-Layer Security** - reCAPTCHA v3, rate limiting, email suppression, disposable email blocking
 - 📊 **Comprehensive Analytics** - Four core admin areas: Who's Chatting, What They're Asking, LLM Quality, Training Data
 - 🎯 **Knowledge Base Management** - Priority-based content with admin curation interface
+- 🔍 **Vector Search System** - OpenAI embeddings with PostgreSQL pgvector for semantic search
 - 💰 **Cost Tracking** - Real-time AI API usage monitoring and budget controls
 - ⏳ **Progressive Loader** - Humorous phase-based loading with abort functionality
 - 🔄 **Training Interface** - Conversation curation for knowledge base improvement
@@ -22,6 +23,7 @@ A production-ready session-based AI chat application designed to provide informa
 - **AI**: Anthropic Claude 3.5 Sonnet (provider-agnostic architecture)
 - **Email**: Postmark for transactional email delivery
 - **Security**: reCAPTCHA v3, multi-layer rate limiting, email suppression
+- **Vector Search**: PostgreSQL pgvector extension with OpenAI embeddings
 - **Styling**: Tailwind CSS with design tokens
 - **TypeScript**: Full type safety throughout
 - **Deployment**: Vercel with cron jobs
@@ -136,6 +138,84 @@ Required environment variables (see `.env.local.example`):
 
 Row Level Security (RLS) prevents cross-user data access with service role bypass for admin operations.
 
+## Vector Search & Knowledge Retrieval
+
+The application uses a sophisticated vector search system to provide contextually relevant information about Brian's background:
+
+### Architecture Overview
+
+**Vector Embeddings Pipeline:**
+1. **Content Processing** - Knowledge base entries are formatted with category, title, content, and tags
+2. **Embedding Generation** - OpenAI's `text-embedding-ada-002` model converts text to 1536-dimensional vectors
+3. **Vector Storage** - Embeddings stored in PostgreSQL using pgvector extension
+4. **Similarity Search** - Cosine similarity matching against user queries in real-time
+
+### How It Works
+
+**Query Processing:**
+1. User asks a question about Brian's background
+2. Question is converted to vector embedding using OpenAI API
+3. PostgreSQL performs similarity search using `match_knowledge_entries` function
+4. Results filtered by similarity threshold (default 0.7) and ranked by relevance
+5. Category diversity algorithm ensures balanced information across experience, skills, projects, etc.
+
+**Intelligent Context Selection:**
+- **Semantic Matching** - Finds conceptually related information, not just keyword matches
+- **Category Balancing** - Ensures representation from experience, skills, education, projects, company info, etc.
+- **Priority Weighting** - Higher priority content gets preference when similarity scores are close
+- **Fallback System** - Gracefully falls back to priority-based selection if vector search fails
+
+**Performance Optimizations:**
+- **Batch Processing** - Multiple embeddings generated efficiently in single API calls  
+- **Caching** - Embeddings generated once and reused for all queries
+- **Threshold Filtering** - Only retrieves sufficiently relevant matches (similarity > 0.7)
+- **Result Limiting** - Configurable result counts prevent context overflow
+
+### Database Integration
+
+**pgvector Extension:**
+```sql
+-- Vector similarity search function
+CREATE FUNCTION match_knowledge_entries(
+  query_embedding vector(1536),
+  match_threshold float DEFAULT 0.7,
+  match_count int DEFAULT 15
+)
+-- Returns ranked results by cosine similarity
+```
+
+**Knowledge Base Schema:**
+- `embedding` column: `vector(1536)` - OpenAI embedding vectors
+- `category` field: Structured categories (experience, skills, projects, etc.)
+- `priority` field: Manual curation priority (1-10 scale)
+- `is_active` flag: Enable/disable entries without deletion
+
+### Cost Management
+
+**Embedding Generation:**
+- OpenAI ada-002 pricing: $0.0001 per 1K tokens
+- Embeddings generated once during knowledge base updates
+- Batch processing minimizes API calls and costs
+
+**Query Processing:**
+- Each user query generates one embedding (~$0.00004 per query)
+- Vector search performed locally in PostgreSQL (no additional API costs)
+- Efficient similarity calculations using optimized pgvector operations
+
+### Administrative Features
+
+**Embedding Management:**
+- **Auto-Generation** - New knowledge base entries automatically get embeddings
+- **Bulk Processing** - Admin interface for regenerating all embeddings
+- **Quality Monitoring** - Track embedding generation success/failure rates
+- **Cost Tracking** - Monitor OpenAI API usage for embedding operations
+
+**Search Analytics:**
+- **Query Performance** - Track search response times and result quality
+- **Similarity Metrics** - Monitor average similarity scores and threshold effectiveness
+- **Fallback Frequency** - Measure how often fallback to priority-based search occurs
+- **Category Distribution** - Analyze which content categories are most relevant to user queries
+
 ## Admin Features
 
 Admin users (in `admin_users` table) can access comprehensive dashboard with tabs:
@@ -170,6 +250,7 @@ Admin users (in `admin_users` table) can access comprehensive dashboard with tab
 - `GET /api/admin/sessions` - Individual session details
 - `GET|PATCH /api/admin/training` - Conversation curation interface
 - `GET|POST /api/admin/knowledge` - Knowledge base management
+- `POST /api/admin/embeddings/generate` - Generate vector embeddings for knowledge base
 - `GET|POST|DELETE /api/admin/suppressions` - Email suppression management
 
 **Security & Automation:**
@@ -227,6 +308,8 @@ database/               # Schema and migrations
 **AI Integration:**
 - `AIProviderFactory` - Swappable AI provider architecture
 - `ClaudeProvider` - Current Claude 3.5 Sonnet implementation with cost tracking
+- `RAGService` - Vector search and knowledge retrieval system
+- `OpenAIEmbeddingService` - Embedding generation and cost management
 
 ## Contributing
 

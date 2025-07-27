@@ -39,6 +39,7 @@ interface AIProvider {
 - **Email-based session authentication** with token-based access, Postmark integration, and webhook automation
 - **Smart Progressive Loader** with humorous phase-based messaging, minimum display time, and abort functionality with prompt repopulation
 - **Knowledge Base Management** with dedicated tab, search/filter, CRUD operations, and "Suggest for Knowledge Base" workflow
+- **Vector Search System** with OpenAI embeddings, PostgreSQL pgvector, semantic similarity matching, and intelligent context selection
 - **Admin Training Interface** with conversation curation, quality rating, intelligent categorization, and knowledge extraction
 - **Session Analytics** with comprehensive tracking, cost monitoring, detailed dashboards, and four core analytics areas (A, B, C, D)
 - **Admin Dashboard** with Statistics, Users, Sessions, Training, Knowledge Base, and Suppression Management tabs
@@ -210,7 +211,8 @@ components/
 ### AI Provider Integration
 - **Architecture**: Use provider factory pattern from `/src/lib/ai/` for swappable AI providers
 - **Usage Tracking**: Always log usage to `chat_messages` table with token counts, costs, and confidence scores
-- **Context Management**: Include knowledge base context + conversation history in AI requests
+- **Context Management**: Include knowledge base context + conversation history in AI requests via RAG system
+- **Vector Search**: Use `RAGService` for semantic knowledge retrieval with OpenAI embeddings and pgvector similarity search
 - **Error Handling**: Implement graceful error handling with user-friendly messages and loader abort functionality
 - **Quality Tracking**: Track confidence scores, response times, and costs for training and optimization
 
