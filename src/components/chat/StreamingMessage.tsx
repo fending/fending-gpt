@@ -30,12 +30,13 @@ export default function StreamingMessage({
         setShowCursor(prev => !prev)
       }, 500)
 
-      // Type out the content
+      // Smart typing with word boundary awareness
       if (currentIndex < content.length) {
         intervalRef.current = setTimeout(() => {
-          setDisplayedContent(content.slice(0, currentIndex + 1))
-          setCurrentIndex(prev => prev + 1)
-        }, 15 + Math.random() * 20) // Faster typing - doubled the speed
+          const nextChunk = getNextChunk(content, currentIndex)
+          setDisplayedContent(content.slice(0, currentIndex + nextChunk.length))
+          setCurrentIndex(prev => prev + nextChunk.length)
+        }, getTypingDelay(content, currentIndex))
       } else {
         // Finished typing
         setShowCursor(false)
@@ -76,6 +77,52 @@ export default function StreamingMessage({
       setShowCursor(true)
     }
   }, [content, isStreaming, currentIndex])
+
+  // Helper function to get next chunk of text (word-aware)
+  const getNextChunk = (text: string, startIndex: number): string => {
+    if (startIndex >= text.length) return ''
+    
+    const remainingText = text.slice(startIndex)
+    
+    // If we're at a space or punctuation, show the next word
+    const wordMatch = remainingText.match(/^(\s*\S+)/)
+    if (wordMatch && wordMatch[1].length <= 15) { // Don't chunk very long words
+      return wordMatch[1]
+    }
+    
+    // For very long words or other cases, fall back to character-by-character
+    return remainingText[0]
+  }
+
+  // Helper function to calculate typing delay based on context
+  const getTypingDelay = (text: string, currentIndex: number): number => {
+    if (currentIndex >= text.length) return 0
+    
+    const currentChar = text[currentIndex]
+    
+    // Longer pauses after sentences and line breaks
+    if (currentChar === '.' || currentChar === '!' || currentChar === '?') {
+      return 200
+    }
+    
+    // Medium pause after commas and colons
+    if (currentChar === ',' || currentChar === ':' || currentChar === ';') {
+      return 100
+    }
+    
+    // Shorter pause after spaces (word boundaries)
+    if (currentChar === ' ') {
+      return 50
+    }
+    
+    // Line breaks get longer pauses
+    if (currentChar === '\n') {
+      return 300
+    }
+    
+    // Default typing speed for characters
+    return 20
+  }
 
   const isAssistant = role === 'assistant'
 

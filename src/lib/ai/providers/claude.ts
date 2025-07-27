@@ -1,18 +1,57 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { AIProvider, ChatMessage, AIResponse, GenerationOptions } from '../types'
 
+export type ClaudeModel = 'sonnet' | 'haiku'
+
+interface ClaudeModelConfig {
+  model: string
+  maxTokens: number
+  costPerToken: {
+    input: number
+    output: number
+  }
+}
+
+const MODEL_CONFIGS: Record<ClaudeModel, ClaudeModelConfig> = {
+  sonnet: {
+    model: 'claude-3-5-sonnet-20241022',
+    maxTokens: 200000,
+    costPerToken: {
+      input: 0.003,   // $3 per 1M tokens
+      output: 0.015,  // $15 per 1M tokens
+    }
+  },
+  haiku: {
+    model: 'claude-3-5-haiku-20241022',
+    maxTokens: 200000,
+    costPerToken: {
+      input: 0.00025, // $0.25 per 1M tokens
+      output: 0.00125, // $1.25 per 1M tokens
+    }
+  }
+}
+
 export class ClaudeProvider implements AIProvider {
   name = 'claude'
-  model = 'claude-3-5-sonnet-20241022'
-  maxTokens = 200000
-  costPerToken = {
-    input: 0.003,   // $3 per 1M tokens
-    output: 0.015,  // $15 per 1M tokens
+  model: string
+  maxTokens: number
+  costPerToken: {
+    input: number
+    output: number
   }
+  
+  private modelType: ClaudeModel
 
   private client: Anthropic
 
-  constructor(apiKey?: string) {
+  constructor(modelType: ClaudeModel = 'sonnet', apiKey?: string) {
+    this.modelType = modelType
+    const config = MODEL_CONFIGS[modelType]
+    
+    this.model = config.model
+    this.maxTokens = config.maxTokens
+    this.costPerToken = config.costPerToken
+    
     this.client = new Anthropic({
       apiKey: apiKey || process.env.CLAUDE_API_KEY!,
     })
@@ -62,6 +101,7 @@ export class ClaudeProvider implements AIProvider {
         responseTimeMs: responseTime,
         metadata: {
           model: this.model,
+          modelType: this.modelType,
           provider: this.name,
           usage: response.usage,
         }
@@ -123,6 +163,7 @@ export class ClaudeProvider implements AIProvider {
         responseTimeMs: responseTime,
         metadata: {
           model: this.model,
+          modelType: this.modelType,
           provider: this.name,
         }
       }

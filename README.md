@@ -4,7 +4,7 @@ A production-ready session-based AI chat application designed to provide informa
 
 ## Features
 
-- 🤖 **AI Provider Abstraction** - Swappable AI providers (currently Claude 3.5 Sonnet)
+- 🤖 **Smart AI Model Selection** - Automatic routing between Claude Haiku (fast/cheap) and Sonnet (complex) based on query analysis
 - 📧 **Email-Based Sessions** - No persistent accounts, secure session links via email
 - 🚦 **Smart Queue System** - 100 concurrent sessions with 20-person queue
 - 🔒 **Multi-Layer Security** - reCAPTCHA v3, rate limiting, email suppression, disposable email blocking
@@ -20,7 +20,7 @@ A production-ready session-based AI chat application designed to provide informa
 - **Framework**: Next.js 15 with App Router + React 19
 - **Database**: Supabase (PostgreSQL with RLS)
 - **Authentication**: Email-based session tokens (no persistent accounts)
-- **AI**: Anthropic Claude 3.5 Sonnet (provider-agnostic architecture)
+- **AI**: Anthropic Claude 3.5 Haiku/Sonnet with smart model selection (provider-agnostic architecture)
 - **Email**: Postmark for transactional email delivery
 - **Security**: reCAPTCHA v3, multi-layer rate limiting, email suppression
 - **Vector Search**: PostgreSQL pgvector extension with OpenAI embeddings
@@ -146,7 +146,7 @@ The application uses a sophisticated vector search system to provide contextuall
 
 **Vector Embeddings Pipeline:**
 1. **Content Processing** - Knowledge base entries are formatted with category, title, content, and tags
-2. **Embedding Generation** - OpenAI's `text-embedding-ada-002` model converts text to 1536-dimensional vectors
+2. **Embedding Generation** - OpenAI's `text-embedding-3-small` model converts text to 1536-dimensional vectors
 3. **Vector Storage** - Embeddings stored in PostgreSQL using pgvector extension
 4. **Similarity Search** - Cosine similarity matching against user queries in real-time
 
@@ -193,7 +193,7 @@ CREATE FUNCTION match_knowledge_entries(
 ### Cost Management
 
 **Embedding Generation:**
-- OpenAI ada-002 pricing: $0.0001 per 1K tokens
+- OpenAI text-embedding-3-small pricing: $0.00002 per 1K tokens (5x cheaper than ada-002)
 - Embeddings generated once during knowledge base updates
 - Batch processing minimizes API calls and costs
 
@@ -215,6 +215,33 @@ CREATE FUNCTION match_knowledge_entries(
 - **Similarity Metrics** - Monitor average similarity scores and threshold effectiveness
 - **Fallback Frequency** - Measure how often fallback to priority-based search occurs
 - **Category Distribution** - Analyze which content categories are most relevant to user queries
+
+## Smart Model Selection
+
+The application automatically routes queries to the most cost-effective AI model based on complexity analysis:
+
+### How It Works
+
+**Query Analysis:**
+1. **Content Analysis** - Examines query length, complexity indicators, and technical terms
+2. **Intent Classification** - Identifies simple factual questions vs. complex analytical requests
+3. **Model Recommendation** - Routes to Haiku (fast/cheap) or Sonnet (detailed/complex)
+4. **Fallback Protection** - Automatically retries with default model if recommended model fails
+
+**Classification Heuristics:**
+- **Simple → Haiku**: Short factual questions, basic info requests, simple "what/when/where" queries
+- **Complex → Sonnet**: Strategic analysis, detailed explanations, multi-part questions, technical depth
+
+**Cost Impact:**
+- **Haiku**: $0.25/$1.25 per 1M tokens (input/output) - 12x cheaper than Sonnet
+- **Sonnet**: $3/$15 per 1M tokens (input/output) - Higher quality for complex queries
+- **Automatic Optimization**: Potential 60-80% cost savings on simple queries
+
+**Quality Assurance:**
+- Confidence scoring for classification decisions
+- Detailed reasoning logs for admin monitoring
+- Graceful fallback to premium model on any errors
+- Real-time metrics tracking for both models
 
 ## Admin Features
 
@@ -306,12 +333,32 @@ database/               # Schema and migrations
 - `SuppressionManagement` - Email blacklist/whitelist and rate limit controls
 
 **AI Integration:**
-- `AIProviderFactory` - Swappable AI provider architecture
-- `ClaudeProvider` - Current Claude 3.5 Sonnet implementation with cost tracking
+- `AIProviderFactory` - Swappable AI provider architecture with model variants
+- `ClaudeProvider` - Supports both Haiku and Sonnet models with cost tracking
+- `AIService` - Smart model selection with complexity analysis and fallback logic
+- `QueryAnalyzer` - Intelligent routing between models based on query characteristics
 - `RAGService` - Vector search and knowledge retrieval system
 - `OpenAIEmbeddingService` - Embedding generation and cost management
 
-## Contributing
+## Roadmap
+
+### Near Term
+- ✅ **Cost Optimization**: Added Claude 3.5 Haiku for simple queries, Sonnet for complex ones
+- ✅ **Embedding Upgrade**: Migrated to OpenAI text-embedding-3-small for better performance and lower costs  
+- ✅ **Streaming UX**: Enhanced token-by-token display with word boundaries and smart timing
+- **Response Caching**: Cache common questions to reduce API costs
+
+### Future Considerations
+- **Mobile Optimization**: PWA features for better mobile experience
+- **Advanced Analytics**: Query pattern analysis and response quality improvements
+
+### Explicitly Not Planned
+- Complex agentic workflows (overkill for personal background Q&A)
+- Multiple reranking layers (unnecessary complexity for curated knowledge base)
+- Function calling (no clear use case for this domain)
+- Hybrid search (vector search sufficient for personal background content)
+
+## Contributing  
 
 1. Fork the repository
 2. Create a feature branch

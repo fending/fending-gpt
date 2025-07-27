@@ -2,7 +2,7 @@ import OpenAI from 'openai'
 
 export class OpenAIEmbeddingService {
   private client: OpenAI
-  private model = 'text-embedding-ada-002'
+  private model = 'text-embedding-3-small'
 
   constructor() {
     this.client = new OpenAI({
@@ -72,7 +72,7 @@ Tags: ${tags}`.trim()
    * Calculate embedding cost
    */
   calculateCost(tokenCount: number): number {
-    // OpenAI ada-002 pricing: $0.0001 per 1K tokens
-    return (tokenCount / 1000) * 0.0001
+    // OpenAI text-embedding-3-small pricing: $0.00002 per 1K tokens
+    return (tokenCount / 1000) * 0.00002
   }
 }

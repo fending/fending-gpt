@@ -1,5 +1,5 @@
 import { AIProvider, ProviderType, ProviderConfig, ProviderMetrics } from './types'
-import { ClaudeProvider } from './providers/claude'
+import { ClaudeProvider, ClaudeModel } from './providers/claude'
 
 export class AIProviderFactory {
   private static instances = new Map<string, AIProvider>()
@@ -8,9 +8,10 @@ export class AIProviderFactory {
   static create(
     type: ProviderType, 
     config?: ProviderConfig,
-    instanceId?: string
+    instanceId?: string,
+    modelType?: ClaudeModel
   ): AIProvider {
-    const key = instanceId || `${type}-default`
+    const key = instanceId || `${type}-${modelType || 'default'}`
     
     // Return existing instance if available
     if (this.instances.has(key)) {
@@ -21,7 +22,7 @@ export class AIProviderFactory {
 
     switch (type) {
       case 'claude':
-        provider = new ClaudeProvider(config?.apiKey)
+        provider = new ClaudeProvider(modelType || 'sonnet', config?.apiKey)
         break
       
       case 'openai':

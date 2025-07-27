@@ -148,18 +148,8 @@ IMPORTANT: Do NOT introduce yourself or explain what you are in every response. 
 
 Please provide helpful, accurate responses about Brian's background, experience, and qualifications. Keep responses professional and focused on career-related information, though if you do absolutely know a fact or related knowledge from the knowledge base, use it to keep the user engaged and then redirect them to professional conversation.`
 
-    // Create AI service and generate streaming response
+    // Create AI service and generate streaming response with smart model selection
     const aiService = new AIService('claude')
-    const provider = aiService.getProvider()
-
-    if (!provider.generateStreamingResponse) {
-      return new Response(
-        JSON.stringify({ error: 'Streaming not supported by this provider' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const streamingMethod = provider.generateStreamingResponse
 
     // Save user message first - use service role client to ensure it saves
     const serviceSupabase = createServiceRoleClient()
@@ -181,7 +171,7 @@ Please provide helpful, accurate responses about Brian's background, experience,
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const generator = streamingMethod.call(provider, aiMessages, {
+          const generator = aiService.generateSmartStreamingResponse(aiMessages, {
             systemPrompt,
             maxTokens: 1000,
             temperature: 0.7
