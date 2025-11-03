@@ -11,11 +11,17 @@ interface LLMPlatform {
   paramName: 'q' | 'text'
 }
 
+declare global {
+  interface Window {
+    gtag?: (command: string, eventName: string, params: Record<string, string>) => void
+  }
+}
+
 export default function LLMPriming() {
   const trackLLMClick = (platform: string) => {
     // Track analytics event
-    if (typeof window !== 'undefined' && (window as any).gtag) {
-      (window as any).gtag('event', 'llm_prompt_click', {
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', 'llm_prompt_click', {
         'llm_platform': platform,
         'site': 'ai.brianfending',
         'prompt_version': 'v1_2025_11'
