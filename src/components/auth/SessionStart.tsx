@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Mail, Bot, CheckCircle } from 'lucide-react'
+import { Mail, CheckCircle } from 'lucide-react'
+import Image from 'next/image'
 import { useRecaptcha } from '@/lib/security/useRecaptcha'
 import QueueStatus from './QueueStatus'
 import LLMPriming from './LLMPriming'
@@ -162,8 +163,14 @@ function EmailCollectionForm({
       <div className="max-w-md w-full mx-auto space-y-6 pb-12">
         <div className="bg-white rounded-xl shadow-lg p-6">
           <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Bot className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 mx-auto mb-4">
+              <Image
+                src="/brianfending-ai.webp"
+                alt="Brian's AI Assistant"
+                width={48}
+                height={48}
+                className="rounded-lg"
+              />
             </div>
             <h2 className="text-2xl font-bold text-gray-900">Meet Brian&apos;s AI Assistant</h2>
             <p className="text-gray-600 mt-2">
