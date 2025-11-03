@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Mail, Bot, CheckCircle } from 'lucide-react'
 import { useRecaptcha } from '@/lib/security/useRecaptcha'
 import QueueStatus from './QueueStatus'
+import LLMPriming from './LLMPriming'
 
 interface SessionStatus {
   status: 'email_collection' | 'email_sent' | 'active' | 'queued' | 'loading'
@@ -157,54 +158,58 @@ function EmailCollectionForm({
   isSubmitting?: boolean
 }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Bot className="w-8 h-8 text-blue-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900">Meet Brian&apos;s AI Assistant</h2>
-          <p className="text-gray-600 mt-2">
-            Get instant answers about Brian&apos;s background, experience, and skills. 
-            Perfect for recruiters and potential collaborators. 
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="your@email.com"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              We&apos;ll send you a secure link to start the conversation
+    <div className="bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen py-8 px-4">
+      <div className="max-w-md w-full mx-auto space-y-6 pb-12">
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="text-center mb-8">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Bot className="w-6 h-6 text-blue-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Meet Brian&apos;s AI Assistant</h2>
+            <p className="text-gray-600 mt-2">
+              Get instant answers about Brian&apos;s background, experience, and skills.
+              Perfect for recruiters and potential collaborators.
             </p>
           </div>
 
-          <button
-            onClick={onSubmit}
-            disabled={!email.trim() || isSubmitting}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center space-x-2"
-          >
-            <Mail className="w-4 h-4" />
-            <span>{isSubmitting ? 'Verifying...' : 'Send Chat Link'}</span>
-          </button>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="your@email.com"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                We&apos;ll send you a secure link to start the conversation
+              </p>
+            </div>
+
+            <button
+              onClick={onSubmit}
+              disabled={!email.trim() || isSubmitting}
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center space-x-2"
+            >
+              <Mail className="w-4 h-4" />
+              <span>{isSubmitting ? 'Verifying...' : 'Send Chat Link'}</span>
+            </button>
+          </div>
+
+          <div className="mt-6 text-xs text-gray-400 text-center">
+            <p>Direct access to Brian&apos;s professional information</p>
+            <p>Secure • No spam • <strong><a href="https://www.brianfending.com/contact">Questions?</a></strong></p>
+            <p><a href="/privacy" className="text-blue-500 hover:text-blue-600 underline">Privacy Policy</a></p>
+          </div>
         </div>
 
-        <div className="mt-6 text-xs text-gray-400 text-center">
-          <p>Direct access to Brian&apos;s professional information</p>
-          <p>Secure • No spam • <strong><a href="https://www.brianfending.com/contact">Questions?</a></strong></p>
-          <p><a href="/privacy" className="text-blue-500 hover:text-blue-600 underline">Privacy Policy</a></p>
-        </div>
+        <LLMPriming />
       </div>
     </div>
   )
