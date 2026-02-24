@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     total_cost_usd DECIMAL(10, 6) DEFAULT 0,
     total_tokens_used INTEGER DEFAULT 0,
     user_agent TEXT,
-    referrer TEXT
+    referrer TEXT,
+    jira_issue_key TEXT
 );
 
 -- Chat messages table (enhanced version for session-based chat)
