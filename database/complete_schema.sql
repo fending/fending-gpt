@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     confidence_score DECIMAL(3, 2), -- AI response confidence 0.00-1.00
     response_time_ms INTEGER,
     question_type TEXT, -- 'experience', 'skills', 'projects', 'personal', 'other'
+    rag_entry_ids TEXT[], -- Knowledge base entry IDs used for this response
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

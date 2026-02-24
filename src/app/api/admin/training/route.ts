@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireAdmin, extractSessionToken } from '@/lib/auth/middleware'
+import { generateText } from 'ai'
+import { getAnthropicModel } from '@/lib/ai/models'
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,6 +60,12 @@ export async function GET(request: NextRequest) {
       quality_rating?: number
       is_approved?: boolean
       admin_notes?: string | null
+      extracted_knowledge?: Array<{
+        category: string
+        title: string
+        content: string
+        tags: string[]
+      }> | null
     }> = []
     
     sessions?.forEach(session => {
@@ -97,10 +105,10 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Get existing training data
+    // Get existing training data (including extracted_knowledge)
     const { data: trainingData } = await supabase
       .from('training_conversations')
-      .select('original_session_id, quality_rating, is_approved, admin_notes')
+      .select('original_session_id, quality_rating, is_approved, admin_notes, extracted_knowledge')
 
     // Merge training data with conversations
     const trainingMap = new Map()
@@ -114,6 +122,7 @@ export async function GET(request: NextRequest) {
         conv.quality_rating = training.quality_rating
         conv.is_approved = training.is_approved
         conv.admin_notes = training.admin_notes
+        conv.extracted_knowledge = training.extracted_knowledge
       }
     })
 
@@ -215,6 +224,20 @@ export async function PATCH(request: NextRequest) {
       throw upsertError
     }
 
+    // Fire-and-forget: extract knowledge on high ratings (>= 4)
+    if (quality_rating >= 4) {
+      extractKnowledgeFromConversation(sessionId).catch(err => {
+        console.error('Knowledge extraction failed (non-blocking):', err)
+      })
+    }
+
+    // Log RAG entry IDs for low-rated conversations (<= 2)
+    if (quality_rating <= 2) {
+      logLowRatedConversationContext(sessionId).catch(err => {
+        console.error('Low-rating context logging failed (non-blocking):', err)
+      })
+    }
+
     return NextResponse.json({ success: true })
 
   } catch (error) {
@@ -222,6 +245,122 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       { error: 'Internal server error', details: error },
       { status: 500 }
+    )
+  }
+}
+
+/**
+ * Fire-and-forget: Extract structured knowledge from a highly-rated conversation
+ * using Claude Haiku, then save to training_conversations.extracted_knowledge.
+ */
+async function extractKnowledgeFromConversation(sessionId: string) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const { data: messages, error: messagesError } = await supabase
+    .from('chat_messages')
+    .select('role, content')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true })
+
+  if (messagesError || !messages || messages.length < 2) {
+    console.warn('No messages found for knowledge extraction, session:', sessionId)
+    return
+  }
+
+  const qaPairs: string[] = []
+  for (let i = 0; i < messages.length - 1; i++) {
+    if (messages[i].role === 'user' && messages[i + 1]?.role === 'assistant') {
+      qaPairs.push(`Q: ${messages[i].content}\nA: ${messages[i + 1].content}`)
+    }
+  }
+
+  if (qaPairs.length === 0) {
+    console.warn('No valid Q&A pairs found for knowledge extraction, session:', sessionId)
+    return
+  }
+
+  const qaText = qaPairs.join('\n\n---\n\n')
+
+  const { text } = await generateText({
+    model: getAnthropicModel('haiku'),
+    system: `Extract key facts about Brian Fending from this Q&A pair. Return JSON array of knowledge entries: [{"category": "experience|skills|projects|education|personal|company|affiliations", "title": "short title", "content": "the factual content", "tags": ["tag1", "tag2"]}]. Only extract genuinely new/useful facts. Return empty array [] if no useful knowledge. Return ONLY valid JSON, no markdown fences or explanation.`,
+    messages: [{ role: 'user', content: qaText }],
+    maxOutputTokens: 1000,
+    temperature: 0.3,
+  })
+
+  let extractedKnowledge: Array<{
+    category: string
+    title: string
+    content: string
+    tags: string[]
+  }> = []
+
+  try {
+    const parsed = JSON.parse(text.trim())
+    if (Array.isArray(parsed)) {
+      extractedKnowledge = parsed.filter(
+        (entry: Record<string, unknown>) =>
+          entry &&
+          typeof entry.category === 'string' &&
+          typeof entry.title === 'string' &&
+          typeof entry.content === 'string'
+      )
+    }
+  } catch (parseError) {
+    console.error('Failed to parse knowledge extraction JSON:', parseError)
+    console.error('Raw response:', text)
+    return
+  }
+
+  const { error: updateError } = await supabase
+    .from('training_conversations')
+    .update({ extracted_knowledge: extractedKnowledge })
+    .eq('original_session_id', sessionId)
+
+  if (updateError) {
+    console.error('Failed to save extracted knowledge:', updateError)
+  } else {
+    console.log(`Extracted ${extractedKnowledge.length} knowledge entries for session ${sessionId}`)
+  }
+}
+
+/**
+ * Fire-and-forget: Log RAG entry IDs used in low-rated conversations
+ * so admins can identify which KB entries may need review.
+ */
+async function logLowRatedConversationContext(sessionId: string) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const { data: messages, error } = await supabase
+    .from('chat_messages')
+    .select('id, rag_entry_ids')
+    .eq('session_id', sessionId)
+    .eq('role', 'assistant')
+
+  if (error) {
+    console.error('Failed to fetch messages for low-rating review:', error)
+    return
+  }
+
+  const ragEntryIds = messages
+    ?.filter(m => m.rag_entry_ids && m.rag_entry_ids.length > 0)
+    .flatMap(m => m.rag_entry_ids) || []
+
+  if (ragEntryIds.length > 0) {
+    console.warn(
+      `LOW-RATED CONVERSATION (session: ${sessionId}) - RAG entry IDs used: [${ragEntryIds.join(', ')}]. ` +
+      `These knowledge base entries may need review.`
+    )
+  } else {
+    console.warn(
+      `LOW-RATED CONVERSATION (session: ${sessionId}) - No RAG entry IDs recorded for this session.`
     )
   }
 }

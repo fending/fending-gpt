@@ -1,8 +1,8 @@
-import { ClaudeModel } from './providers/claude'
+import type { ModelType } from './models'
 
 export interface QueryAnalysis {
   complexity: 'simple' | 'complex'
-  recommendedModel: ClaudeModel
+  recommendedModel: ModelType
   confidence: number
   reasoning: string[]
 }
@@ -125,6 +125,6 @@ export function analyzeQueryComplexity(message: string): QueryAnalysis {
 /**
  * Quick model recommendation without detailed analysis
  */
-export function getRecommendedModel(message: string): ClaudeModel {
+export function getRecommendedModel(message: string): ModelType {
   return analyzeQueryComplexity(message).recommendedModel
 }

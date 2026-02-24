@@ -38,16 +38,17 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
     expiresAt: string
   } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const streamedTextRef = useRef('')
   const supabase = createClient()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (showLoading = false) => {
     if (!sessionToken) return
 
-    setLoading(true)
+    if (showLoading) setLoading(true)
     try {
       // Get session info
       const sessionResponse = await fetch(`/api/session/start?token=${sessionToken}`)
@@ -112,7 +113,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
   }, [sessionToken, supabase])
 
   useEffect(() => {
-    fetchMessages()
+    fetchMessages(true)
   }, [fetchMessages])
 
   useEffect(() => {
@@ -124,6 +125,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
     setLastMessage('') // Clear immediately for UX
     setAbortMessage(content) // Store for abort functionality
     setStreamingMessage('')
+    streamedTextRef.current = ''
     setIsStreaming(true)
     
     // Add user message to conversation immediately
@@ -185,17 +187,31 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
                 const data = JSON.parse(line.slice(6))
                 if (data.chunk) {
                   console.log('📝 Received chunk:', data.chunk.length, 'chars')
+                  streamedTextRef.current += data.chunk
                   setStreamingMessage(prev => prev + data.chunk)
                 } else if (data.done) {
-                  // Stream complete
+                  // Stream complete - add streamed content as a local message
+                  // before fetching from DB so there's no visual gap
                   console.log('✅ Streaming API succeeded')
                   setIsStreaming(false)
+                  setMessages(prev => {
+                    const streamedContent = prev.find(m => m.id === 'temp-streaming')
+                      ? prev
+                      : [...prev, {
+                          id: 'temp-streaming',
+                          role: 'assistant' as const,
+                          content: streamedTextRef.current,
+                          created_at: new Date().toISOString(),
+                          tokens_used: data.metadata?.tokensUsed ?? null,
+                          cost_usd: data.metadata?.costUsd ?? null,
+                          confidence_score: data.metadata?.confidenceScore ?? null,
+                          response_time_ms: data.metadata?.responseTimeMs ?? null,
+                        }]
+                    return streamedContent
+                  })
                   setStreamingMessage('')
-                  // Add a small delay to ensure database write is complete before fetching
-                  setTimeout(async () => {
-                    await fetchMessages()
-                  }, 500)
-                  // Clear the input after successful streaming response
+                  // Fetch persisted messages in background (replaces temp with DB records)
+                  setTimeout(() => { fetchMessages() }, 300)
                   setLastMessage('')
                   setAbortMessage('')
                 } else if (data.error) {
@@ -244,10 +260,8 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
         await fallbackResponse.json()
         console.log('✅ Fallback API succeeded')
         
-        // Add a small delay to ensure database write is complete before fetching
-        setTimeout(async () => {
-          await fetchMessages()
-        }, 500)
+        // Fetch persisted messages in background
+        setTimeout(() => { fetchMessages() }, 300)
         
         // Clear the input after successful fallback response
         setLastMessage('')

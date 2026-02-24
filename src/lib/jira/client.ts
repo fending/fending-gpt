@@ -59,7 +59,7 @@ export class JiraClient {
             version: 1,
             content: this.buildLeadDescription(params),
           },
-          issuetype: { name: 'Task' },
+          issuetype: { name: process.env.JIRA_ISSUE_TYPE || 'Lead' },
           labels: ['ai-lead', 'fending-gpt'],
         },
       }),
