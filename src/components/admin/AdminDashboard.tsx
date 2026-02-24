@@ -7,10 +7,11 @@ import UsersList from './UsersList'
 import SessionsList from './SessionsList'
 import TrainingInterface from './TrainingInterface'
 import KnowledgeBase from './KnowledgeBase'
-import { BarChart3, Users, Settings, Monitor, BookOpen, Database, MessageSquare } from 'lucide-react'
+import SystemPromptEditor from './SystemPromptEditor'
+import { BarChart3, Users, Settings, Monitor, BookOpen, Database, MessageSquare, Sliders } from 'lucide-react'
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions' | 'training' | 'knowledge'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions' | 'training' | 'knowledge' | 'settings'>('stats')
   const router = useRouter()
   const [suggestedKnowledge, setSuggestedKnowledge] = useState<{
     category: string
@@ -41,6 +42,7 @@ export default function AdminDashboard() {
     { id: 'sessions', label: 'Sessions', icon: Monitor },
     { id: 'training', label: 'Training', icon: BookOpen },
     { id: 'knowledge', label: 'Knowledge Base', icon: Database },
+    { id: 'settings', label: 'Settings', icon: Sliders },
   ]
 
   return (
@@ -70,7 +72,7 @@ export default function AdminDashboard() {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'stats' | 'users' | 'sessions' | 'training' | 'knowledge')}
+                  onClick={() => setActiveTab(tab.id as 'stats' | 'users' | 'sessions' | 'training' | 'knowledge' | 'settings')}
                   className={`flex items-center px-1 py-2 text-sm font-medium border-b-2 ${
                     activeTab === tab.id
                       ? 'border-indigo-500 text-indigo-600'
@@ -90,6 +92,7 @@ export default function AdminDashboard() {
             {activeTab === 'sessions' && <SessionsList />}
             {activeTab === 'training' && <TrainingInterface onSuggestKnowledge={handleSuggestKnowledge} />}
             {activeTab === 'knowledge' && <KnowledgeBase prefilledData={suggestedKnowledge || undefined} onDataUsed={handleKnowledgeDataUsed} />}
+            {activeTab === 'settings' && <SystemPromptEditor />}
           </div>
         </div>
       </div>
