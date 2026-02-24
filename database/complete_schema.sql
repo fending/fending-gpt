@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
     source TEXT DEFAULT 'manual', -- 'manual', 'conversation', 'import'
     confidence DECIMAL(3, 2) DEFAULT 1.0, -- How confident we are in this info
     embedding vector(1536), -- OpenAI ada-002 embedding vector
+    search_vector tsvector, -- Full-text search vector for hybrid search
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -213,10 +214,13 @@ CREATE INDEX IF NOT EXISTS idx_email_events_created ON email_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_disposable_domains_domain ON disposable_email_domains(domain);
 
 -- Vector similarity search index
-CREATE INDEX IF NOT EXISTS knowledge_base_embedding_idx 
-ON knowledge_base 
-USING ivfflat (embedding vector_cosine_ops) 
+CREATE INDEX IF NOT EXISTS knowledge_base_embedding_idx
+ON knowledge_base
+USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
+
+-- Full-text search index for hybrid search
+CREATE INDEX IF NOT EXISTS knowledge_base_search_idx ON knowledge_base USING gin(search_vector);
 
 -- ========================================
 -- TRIGGERS AND FUNCTIONS
@@ -239,6 +243,23 @@ CREATE TRIGGER update_knowledge_base_updated_at BEFORE UPDATE ON knowledge_base
 DROP TRIGGER IF EXISTS update_system_config_updated_at ON system_config;
 CREATE TRIGGER update_system_config_updated_at BEFORE UPDATE ON system_config
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Auto-populate search_vector for full-text search (hybrid search support)
+CREATE OR REPLACE FUNCTION knowledge_base_search_vector_update() RETURNS trigger AS $$
+BEGIN
+  NEW.search_vector :=
+    setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(NEW.content, '')), 'B') ||
+    setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'C') ||
+    setweight(to_tsvector('english', coalesce(NEW.category, '')), 'D');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS knowledge_base_search_vector_trigger ON knowledge_base;
+CREATE TRIGGER knowledge_base_search_vector_trigger
+  BEFORE INSERT OR UPDATE ON knowledge_base
+  FOR EACH ROW EXECUTE FUNCTION knowledge_base_search_vector_update();
 
 -- Function to perform vector similarity search on knowledge base
 CREATE OR REPLACE FUNCTION match_knowledge_entries(
@@ -274,6 +295,76 @@ BEGIN
         AND kb.embedding IS NOT NULL
         AND (1 - (kb.embedding <=> query_embedding)) > match_threshold
     ORDER BY kb.embedding <=> query_embedding
+    LIMIT match_count;
+END;
+$$;
+
+-- Function to perform hybrid search (vector similarity + full-text) on knowledge base
+CREATE OR REPLACE FUNCTION match_knowledge_entries_hybrid(
+    query_embedding vector(1536),
+    query_text text DEFAULT '',
+    match_threshold float DEFAULT 0.5,
+    match_count int DEFAULT 15,
+    vector_weight float DEFAULT 0.7,
+    text_weight float DEFAULT 0.3
+)
+RETURNS TABLE (
+    id uuid,
+    category text,
+    title text,
+    content text,
+    tags text[],
+    priority int,
+    similarity float
+)
+LANGUAGE plpgsql
+SET search_path = public, extensions
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH vector_results AS (
+        SELECT
+            kb.id,
+            kb.category,
+            kb.title,
+            kb.content,
+            kb.tags,
+            kb.priority,
+            (1 - (kb.embedding <=> query_embedding)) AS vector_score
+        FROM knowledge_base kb
+        WHERE
+            kb.is_active = true
+            AND kb.embedding IS NOT NULL
+    ),
+    text_results AS (
+        SELECT
+            kb.id,
+            ts_rank_cd(kb.search_vector, websearch_to_tsquery('english', query_text)) AS text_score
+        FROM knowledge_base kb
+        WHERE
+            kb.is_active = true
+            AND kb.search_vector IS NOT NULL
+            AND query_text != ''
+            AND kb.search_vector @@ websearch_to_tsquery('english', query_text)
+    )
+    SELECT
+        vr.id,
+        vr.category,
+        vr.title,
+        vr.content,
+        vr.tags,
+        vr.priority,
+        (
+            vr.vector_score * vector_weight +
+            COALESCE(tr.text_score, 0) * text_weight
+        )::float AS similarity
+    FROM vector_results vr
+    LEFT JOIN text_results tr ON vr.id = tr.id
+    WHERE (
+        vr.vector_score * vector_weight +
+        COALESCE(tr.text_score, 0) * text_weight
+    ) > match_threshold
+    ORDER BY similarity DESC
     LIMIT match_count;
 END;
 $$;
@@ -543,6 +634,7 @@ INSERT INTO system_config (key, value, description) VALUES (
 
 COMMENT ON EXTENSION vector IS 'pgvector extension in extensions schema for security';
 COMMENT ON COLUMN knowledge_base.embedding IS 'OpenAI ada-002 embedding vector (1536 dimensions) for semantic search';
+COMMENT ON COLUMN knowledge_base.search_vector IS 'Full-text search tsvector for hybrid search (vector + text)';
 COMMENT ON VIEW public.daily_session_stats IS 'Daily session statistics with explicit SECURITY INVOKER';
 COMMENT ON VIEW public.popular_questions IS 'Popular question analytics with explicit SECURITY INVOKER';
 
@@ -562,3 +654,45 @@ BEGIN
     RAISE NOTICE '4. Test admin access with admin@brianfending.com';
     RAISE NOTICE '========================================';
 END $$;
+
+-- ========================================
+-- MIGRATION: Add hybrid search support
+-- ========================================
+-- Run the following against existing databases that were created
+-- before hybrid search was added to this schema:
+--
+-- 1. Add the search_vector column:
+--    ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS search_vector tsvector;
+--
+-- 2. Create the GIN index:
+--    CREATE INDEX IF NOT EXISTS knowledge_base_search_idx ON knowledge_base USING gin(search_vector);
+--
+-- 3. Create the trigger function and trigger:
+--    CREATE OR REPLACE FUNCTION knowledge_base_search_vector_update() RETURNS trigger AS $$
+--    BEGIN
+--      NEW.search_vector :=
+--        setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
+--        setweight(to_tsvector('english', coalesce(NEW.content, '')), 'B') ||
+--        setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'C') ||
+--        setweight(to_tsvector('english', coalesce(NEW.category, '')), 'D');
+--      RETURN NEW;
+--    END;
+--    $$ LANGUAGE plpgsql;
+--
+--    CREATE TRIGGER knowledge_base_search_vector_trigger
+--      BEFORE INSERT OR UPDATE ON knowledge_base
+--      FOR EACH ROW EXECUTE FUNCTION knowledge_base_search_vector_update();
+--
+-- 4. Backfill existing rows (triggers only fire on INSERT/UPDATE):
+--    UPDATE knowledge_base SET
+--      search_vector =
+--        setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+--        setweight(to_tsvector('english', coalesce(content, '')), 'B') ||
+--        setweight(to_tsvector('english', coalesce(array_to_string(tags, ' '), '')), 'C') ||
+--        setweight(to_tsvector('english', coalesce(category, '')), 'D');
+--
+-- 5. Create the hybrid search function:
+--    (See match_knowledge_entries_hybrid definition above in this file)
+--
+-- The original match_knowledge_entries function is preserved for
+-- backwards compatibility. No changes needed for existing callers.
