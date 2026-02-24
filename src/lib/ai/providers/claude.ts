@@ -14,7 +14,7 @@ interface ClaudeModelConfig {
 
 const MODEL_CONFIGS: Record<ClaudeModel, ClaudeModelConfig> = {
   sonnet: {
-    model: 'claude-3-5-sonnet-20241022',
+    model: 'claude-sonnet-4-6',
     maxTokens: 200000,
     costPerToken: {
       input: 0.003,   // $3 per 1M tokens
@@ -22,11 +22,11 @@ const MODEL_CONFIGS: Record<ClaudeModel, ClaudeModelConfig> = {
     }
   },
   haiku: {
-    model: 'claude-3-5-haiku-20241022',
+    model: 'claude-haiku-4-5-20251001',
     maxTokens: 200000,
     costPerToken: {
-      input: 0.00025, // $0.25 per 1M tokens
-      output: 0.00125, // $1.25 per 1M tokens
+      input: 0.0008,  // $0.80 per 1M tokens
+      output: 0.004,  // $4 per 1M tokens
     }
   }
 }

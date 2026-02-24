@@ -191,7 +191,7 @@ export class AIService {
                   recommendedModel,
                   confidence: analysis.confidence,
                   reasoning: [...analysis.reasoning, 'Fallback to default after smart model failed'],
-                  modelUsed: 'claude-3-5-sonnet-20241022' // Default fallback model
+                  modelUsed: 'claude-sonnet-4-6' // Default fallback model
                 }
               } as AIResponse & { modelAnalysis?: { queryComplexity: string; recommendedModel: string; confidence: number; reasoning: string[]; modelUsed: string } }
             } else {
