@@ -1,21 +1,29 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { OpenAIEmbeddingService } from '@/lib/embeddings/openai'
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const forceAll = searchParams.get('force') === 'true'
+
     // Use service role client to bypass RLS for admin operations
     const supabase = createServiceRoleClient()
     const embeddingService = new OpenAIEmbeddingService()
 
-    console.log('🚀 Starting knowledge base embedding generation...')
+    console.log(`Starting knowledge base embedding generation (force=${forceAll})...`)
 
-    // Get all active knowledge base entries without embeddings
-    const { data: entries, error: fetchError } = await supabase
+    // Get active knowledge base entries — all if force=true, only missing if not
+    let query = supabase
       .from('knowledge_base')
       .select('id, category, title, content, tags')
       .eq('is_active', true)
-      .is('embedding', null)
+
+    if (!forceAll) {
+      query = query.is('embedding', null)
+    }
+
+    const { data: entries, error: fetchError } = await query
 
     if (fetchError) {
       console.error('Error fetching knowledge entries:', fetchError)

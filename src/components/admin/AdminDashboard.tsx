@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import AdminStats from './AdminStats'
 import UsersList from './UsersList'
@@ -12,6 +12,7 @@ import { BarChart3, Users, Settings, Monitor, BookOpen, Database, MessageSquare,
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'sessions' | 'training' | 'knowledge' | 'settings'>('stats')
+  const [authStatus, setAuthStatus] = useState<'loading' | 'authenticated' | 'unauthenticated' | 'forbidden'>('loading')
   const router = useRouter()
   const [suggestedKnowledge, setSuggestedKnowledge] = useState<{
     category: string
@@ -20,6 +21,31 @@ export default function AdminDashboard() {
     tags: string[]
     priority: number
   } | null>(null)
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem('sessionToken')
+      if (!token) {
+        setAuthStatus('unauthenticated')
+        return
+      }
+      try {
+        const res = await fetch(`/api/session/start?token=${token}`)
+        const data = await res.json()
+        if (!res.ok || data.error) {
+          localStorage.removeItem('sessionToken')
+          setAuthStatus('unauthenticated')
+        } else if (!data.isAdmin) {
+          setAuthStatus('forbidden')
+        } else {
+          setAuthStatus('authenticated')
+        }
+      } catch {
+        setAuthStatus('unauthenticated')
+      }
+    }
+    checkAuth()
+  }, [])
 
   const handleSuggestKnowledge = (data: {
     category: string
@@ -44,6 +70,55 @@ export default function AdminDashboard() {
     { id: 'knowledge', label: 'Knowledge Base', icon: Database },
     { id: 'settings', label: 'Settings', icon: Sliders },
   ]
+
+  if (authStatus === 'loading') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Verifying admin access...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (authStatus === 'unauthenticated') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Session Required</h2>
+          <p className="text-gray-600 mb-4">
+            Start a chat session first, then return here.
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
+          >
+            Go to Chat
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (authStatus === 'forbidden') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md">
+          <h2 className="text-xl font-semibold text-red-600 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-4">
+            Your account does not have admin privileges.
+          </p>
+          <button
+            onClick={() => router.push('/chat')}
+            className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
+          >
+            Back to Chat
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">

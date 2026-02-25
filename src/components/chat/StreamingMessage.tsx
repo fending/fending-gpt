@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { User, Bot } from 'lucide-react'
+import MarkdownRenderer from './MarkdownRenderer'
 
 interface StreamingMessageProps {
   role: 'user' | 'assistant'
@@ -140,8 +141,12 @@ export default function StreamingMessage({
         <div className="font-medium text-sm mb-1">
           {isAssistant ? 'Assistant' : 'You'}
         </div>
-        <div className="text-gray-900 whitespace-pre-wrap">
-          {displayedContent}
+        <div className="text-gray-900">
+          {isAssistant ? (
+            <MarkdownRenderer content={displayedContent} isStreaming={isStreaming} />
+          ) : (
+            <span className="whitespace-pre-wrap">{displayedContent}</span>
+          )}
           {isStreaming && showCursor && (
             <span className="inline-block w-2 h-5 bg-blue-500 ml-1 animate-pulse" />
           )}

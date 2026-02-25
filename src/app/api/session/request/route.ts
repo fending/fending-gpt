@@ -87,6 +87,13 @@ export async function POST(request: NextRequest) {
       // Continue anyway - cleanup failure shouldn't prevent new session creation
     }
 
+    // Derive base URL from request origin to handle port changes in dev
+    const requestOrigin = request.headers.get('origin')
+      || request.headers.get('referer')?.replace(/\/+$/, '')
+      || process.env.NEXTAUTH_URL
+      || 'http://localhost:3000'
+    const baseUrl = requestOrigin.replace(/\/chat.*$/, '').replace(/\/+$/, '')
+
     // Generate a secure session token
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + SESSION_DURATION_MINUTES * 60 * 1000)
@@ -190,13 +197,13 @@ export async function POST(request: NextRequest) {
         message: 'You have been added to the queue',
         // For development/testing
         ...(process.env.NODE_ENV === 'development' && {
-          debugLink: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/chat?token=${token}`
+          debugLink: `${baseUrl}/chat?token=${token}`
         })
       })
     }
 
     // Send email with session link
-    const chatLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/chat?token=${token}`
+    const chatLink = `${baseUrl}/chat?token=${token}`
 
     try {
       await sendSessionEmail(email, chatLink, expiresAt)
