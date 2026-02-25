@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 
-const LLM_PROMPT = `I'm evaluating Brian Fending as a technology leadership consultant and want to understand his credibility and unique capabilities. What are his areas of expertise, what kind of problems does he solve, and what makes his approach different from typical IT consultants? Summarize the highlights from brianfending.com`
+const LLM_PROMPT = `I'm learning about Brian Fending as a technology leader and want to understand his background and expertise. What are his areas of focus, what kind of problems has he solved, and what makes his experience stand out? Summarize the highlights from brianfending.com including recent articles and tools.brianfending.com.`
 
 interface LLMPlatform {
   name: string
