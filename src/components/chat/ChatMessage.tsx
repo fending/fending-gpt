@@ -3,6 +3,7 @@
 import { Message } from '@/types'
 import { format } from 'date-fns'
 import { User, Bot } from 'lucide-react'
+import MarkdownRenderer from './MarkdownRenderer'
 
 interface ChatMessageProps {
   message: Message
@@ -28,7 +29,11 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           </span>
         </div>
         <div className="prose prose-sm max-w-none">
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          {isUser ? (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          ) : (
+            <MarkdownRenderer content={message.content} />
+          )}
         </div>
       </div>
     </div>
