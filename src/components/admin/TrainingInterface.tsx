@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { Star, MessageSquare, User, Bot, ArrowRight } from 'lucide-react'
+import { Star, MessageSquare, User, Bot, ArrowRight, Check, Sparkles } from 'lucide-react'
+
+interface ExtractedKnowledgeEntry {
+  category: string
+  title: string
+  content: string
+  tags: string[]
+}
 
 interface TrainingConversation {
   id: string
@@ -17,6 +24,7 @@ interface TrainingConversation {
   quality_rating: number | null
   is_approved: boolean
   admin_notes: string | null
+  extracted_knowledge: ExtractedKnowledgeEntry[] | null
 }
 
 
@@ -34,6 +42,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
   const [conversations, setConversations] = useState<TrainingConversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<TrainingConversation | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedExtractedEntries, setSelectedExtractedEntries] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     fetchConversations()
@@ -45,8 +54,6 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
       const response = await fetch(`/api/admin/training?token=${sessionToken}`)
       if (!response.ok) throw new Error('Failed to fetch conversations')
       const data = await response.json()
-      console.log('🎯 Frontend received conversations:', data.length)
-      console.log('📋 First 3 conversations:', data.slice(0, 3))
       setConversations(data)
     } catch (error) {
       console.error('Error fetching conversations:', error)
@@ -77,10 +84,10 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
         console.error('Server error:', errorData)
         throw new Error(`Failed to update conversation: ${response.status}`)
       }
-      
+
       // Update local state
-      setConversations(conversations.map(conv => 
-        conv.id === conversationId 
+      setConversations(conversations.map(conv =>
+        conv.id === conversationId
           ? { ...conv, quality_rating: rating, admin_notes: notes, is_approved: rating >= 4 }
           : conv
       ))
@@ -90,11 +97,57 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
     }
   }
 
+  const hasExtractedKnowledge = selectedConversation?.extracted_knowledge &&
+    selectedConversation.extracted_knowledge.length > 0
+
+  const toggleExtractedEntry = (index: number) => {
+    setSelectedExtractedEntries(prev => {
+      const next = new Set(prev)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
+  }
+
+  const suggestExtractedEntries = () => {
+    if (!selectedConversation?.extracted_knowledge || !onSuggestKnowledge) return
+
+    const entries = selectedConversation.extracted_knowledge
+    const indicesToSend = selectedExtractedEntries.size > 0
+      ? Array.from(selectedExtractedEntries)
+      : entries.map((_, i) => i) // Send all if none explicitly selected
+
+    indicesToSend.forEach(index => {
+      const entry = entries[index]
+      if (entry) {
+        onSuggestKnowledge({
+          category: entry.category,
+          title: entry.title,
+          content: entry.content,
+          tags: entry.tags || [],
+          priority: selectedConversation.quality_rating || 3,
+        })
+      }
+    })
+
+    // Reset selection after sending
+    setSelectedExtractedEntries(new Set())
+  }
+
   const suggestForKnowledgeBase = () => {
     if (!selectedConversation || !onSuggestKnowledge) return
 
-    // Extract key information from the conversation
-    const suggestedTitle = selectedConversation.user_message.length > 50 
+    // If extracted knowledge exists, use the extracted entries flow
+    if (hasExtractedKnowledge) {
+      suggestExtractedEntries()
+      return
+    }
+
+    // Fallback: build suggestion from raw Q&A text
+    const suggestedTitle = selectedConversation.user_message.length > 50
       ? selectedConversation.user_message.substring(0, 50) + '...'
       : selectedConversation.user_message
 
@@ -188,7 +241,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
                 className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
                   selectedConversation?.id === conversation.id ? 'bg-blue-50' : ''
                 }`}
-                onClick={() => setSelectedConversation(conversation)}
+                onClick={() => { setSelectedConversation(conversation); setSelectedExtractedEntries(new Set()) }}
               >
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-sm font-medium text-gray-900">
@@ -231,7 +284,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
               {/* Conversation Details */}
               <div className="bg-white shadow rounded-lg p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Conversation Details</h3>
-                
+
                 <div className="space-y-4">
                   <div className="flex items-start space-x-3">
                     <User className="h-5 w-5 text-blue-600 mt-1" />
@@ -240,7 +293,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
                       <p className="text-sm text-gray-600">{selectedConversation.user_message}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start space-x-3">
                     <Bot className="h-5 w-5 text-green-600 mt-1" />
                     <div className="flex-1">
@@ -253,7 +306,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
                     <div>
                       <p className="text-xs text-gray-500">Confidence</p>
                       <p className={`text-sm font-medium ${getConfidenceColor(selectedConversation.confidence_score)}`}>
-                        {selectedConversation.confidence_score 
+                        {selectedConversation.confidence_score
                           ? `${Math.round(selectedConversation.confidence_score * 100)}%`
                           : 'N/A'
                         }
@@ -262,7 +315,7 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
                     <div>
                       <p className="text-xs text-gray-500">Response Time</p>
                       <p className="text-sm font-medium text-gray-900">
-                        {selectedConversation.response_time_ms 
+                        {selectedConversation.response_time_ms
                           ? `${selectedConversation.response_time_ms}ms`
                           : 'N/A'
                         }
@@ -296,18 +349,74 @@ export default function TrainingInterface({ onSuggestKnowledge }: TrainingInterf
                   )}
                 </div>
 
+                {/* Extracted Knowledge Entries */}
+                {hasExtractedKnowledge && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <Sparkles className="h-4 w-4 text-amber-500" />
+                      <p className="text-sm font-medium text-gray-900">
+                        Extracted Knowledge ({selectedConversation!.extracted_knowledge!.length} entries)
+                      </p>
+                    </div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {selectedConversation!.extracted_knowledge!.map((entry, index) => (
+                        <div
+                          key={index}
+                          onClick={() => toggleExtractedEntry(index)}
+                          className={`p-2 rounded border cursor-pointer text-sm transition-colors ${
+                            selectedExtractedEntries.has(index)
+                              ? 'border-green-500 bg-green-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                                  {entry.category}
+                                </span>
+                                <span className="font-medium text-gray-900 truncate">{entry.title}</span>
+                              </div>
+                              <p className="text-gray-600 mt-1 line-clamp-2">{entry.content}</p>
+                              {entry.tags && entry.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {entry.tags.map(tag => (
+                                    <span key={tag} className="text-xs text-gray-400">#{tag}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {selectedExtractedEntries.has(index) && (
+                              <Check className="h-4 w-4 text-green-600 flex-shrink-0 ml-2" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Click entries to select. If none selected, all will be sent.
+                    </p>
+                  </div>
+                )}
+
                 {/* Suggest for Knowledge Base */}
-                <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className={`mt-4 ${!hasExtractedKnowledge ? 'pt-4 border-t border-gray-200' : ''}`}>
                   <button
                     onClick={suggestForKnowledgeBase}
                     disabled={!onSuggestKnowledge}
                     className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:bg-gray-300 flex items-center justify-center space-x-2"
                   >
                     <ArrowRight className="h-4 w-4" />
-                    <span>Suggest for Knowledge Base</span>
+                    <span>
+                      {hasExtractedKnowledge
+                        ? `Send ${selectedExtractedEntries.size > 0 ? selectedExtractedEntries.size : selectedConversation!.extracted_knowledge!.length} to Knowledge Base`
+                        : 'Suggest for Knowledge Base'}
+                    </span>
                   </button>
                   <p className="text-xs text-gray-500 mt-1 text-center">
-                    Extract insights from this conversation for the knowledge base
+                    {hasExtractedKnowledge
+                      ? 'Send AI-extracted entries to the knowledge base'
+                      : 'Extract insights from this conversation for the knowledge base'}
                   </p>
                 </div>
               </div>

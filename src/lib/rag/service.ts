@@ -25,46 +25,78 @@ export class RAGService {
   }
 
   /**
-   * Retrieve relevant knowledge entries using vector similarity search
+   * Retrieve relevant knowledge entries using hybrid search (vector + full-text)
    */
   async queryKnowledge(
-    userQuery: string, 
+    userQuery: string,
     options: {
       maxResults?: number
       similarityThreshold?: number
       ensureCategoryDiversity?: boolean
+      useHybridSearch?: boolean
     } = {}
   ): Promise<RAGResult> {
     const {
       maxResults = 15,
       similarityThreshold = 0.7,
-      ensureCategoryDiversity = true
+      ensureCategoryDiversity = true,
+      useHybridSearch = true,
     } = options
 
     try {
       // Generate embedding for user query
       const queryEmbedding = await this.embeddingService.generateEmbedding(userQuery)
-      
+
       const supabase = createServiceRoleClient()
 
-      // Perform vector similarity search
-      const { data: similarEntries, error } = await supabase.rpc(
-        'match_knowledge_entries',
-        {
-          query_embedding: queryEmbedding,
-          match_threshold: similarityThreshold,
-          match_count: maxResults * 2 // Get more to allow for rebalancing
-        }
-      )
+      let similarEntries: KnowledgeEntry[] | null = null
+      let searchMethod = 'vector'
 
-      if (error) {
-        console.error('Vector search error:', error)
-        throw new Error('Failed to perform vector search')
+      if (useHybridSearch) {
+        // Attempt hybrid search (vector similarity + full-text)
+        const { data, error: hybridError } = await supabase.rpc(
+          'match_knowledge_entries_hybrid',
+          {
+            query_embedding: queryEmbedding,
+            query_text: userQuery,
+            match_threshold: similarityThreshold,
+            match_count: maxResults * 2,
+            vector_weight: 0.7,
+            text_weight: 0.3,
+          }
+        )
+
+        if (hybridError) {
+          console.error('Hybrid search error, falling back to vector-only:', hybridError)
+        } else {
+          similarEntries = data
+          searchMethod = 'hybrid'
+        }
+      }
+
+      // Fall back to vector-only search if hybrid was disabled or failed
+      if (similarEntries === null) {
+        const { data, error: vectorError } = await supabase.rpc(
+          'match_knowledge_entries',
+          {
+            query_embedding: queryEmbedding,
+            match_threshold: similarityThreshold,
+            match_count: maxResults * 2,
+          }
+        )
+
+        if (vectorError) {
+          console.error('Vector search error:', vectorError)
+          throw new Error('Failed to perform vector search')
+        }
+
+        similarEntries = data
+        searchMethod = 'vector'
       }
 
       let results = similarEntries || []
 
-      console.log(`🎯 Vector search found ${results.length} entries above threshold:`)
+      console.log(`[${searchMethod}] Search found ${results.length} entries above threshold:`)
       results.slice(0, 3).forEach((entry: KnowledgeEntry) => {
         console.log(`  - ${entry.category}: ${entry.title} (similarity: ${entry.similarity?.toFixed(3)})`)
       })
@@ -76,7 +108,7 @@ export class RAGService {
         results = results.slice(0, maxResults)
       }
 
-      console.log(`✅ Final RAG results: ${results.length} entries`)
+      console.log(`Final RAG results: ${results.length} entries (${searchMethod})`)
 
       return {
         entries: results,
@@ -86,7 +118,7 @@ export class RAGService {
 
     } catch (error) {
       console.error('RAG query failed:', error)
-      
+
       // Fallback to priority-based retrieval
       console.log('Falling back to priority-based knowledge retrieval')
       return this.fallbackQuery(maxResults)

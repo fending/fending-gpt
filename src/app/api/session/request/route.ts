@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { checkRateLimit, checkEmailSuppression, checkDisposableEmail, getClientIP } from '@/lib/security/rateLimiting'
 import { verifyRecaptcha } from '@/lib/security/recaptcha'
+import { JiraClient } from '@/lib/jira/client'
 import crypto from 'crypto'
 
 const MAX_CONCURRENT_SESSIONS = 100
@@ -171,6 +172,15 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // Fire-and-forget Jira lead creation
+      fireJiraLeadCreation(serviceSupabase, {
+        email,
+        token,
+        status: 'queued',
+        referrer: request.headers.get('referer'),
+        userAgent: request.headers.get('user-agent'),
+      })
+
       return NextResponse.json({
         success: true,
         status: 'queued',
@@ -179,7 +189,7 @@ export async function POST(request: NextRequest) {
         sessionToken: token,
         message: 'You have been added to the queue',
         // For development/testing
-        ...(process.env.NODE_ENV === 'development' && { 
+        ...(process.env.NODE_ENV === 'development' && {
           debugLink: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/chat?token=${token}`
         })
       })
@@ -187,7 +197,7 @@ export async function POST(request: NextRequest) {
 
     // Send email with session link
     const chatLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/chat?token=${token}`
-    
+
     try {
       await sendSessionEmail(email, chatLink, expiresAt)
     } catch (emailError) {
@@ -198,12 +208,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Fire-and-forget Jira lead creation
+    fireJiraLeadCreation(serviceSupabase, {
+      email,
+      token,
+      status: 'pending',
+      referrer: request.headers.get('referer'),
+      userAgent: request.headers.get('user-agent'),
+    })
+
     return NextResponse.json({
       success: true,
       message: 'Session link sent to email',
       // For development/testing, include the link
-      ...(process.env.NODE_ENV === 'development' && { 
-        debugLink: chatLink 
+      ...(process.env.NODE_ENV === 'development' && {
+        debugLink: chatLink
       })
     })
 
@@ -214,6 +233,48 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+interface JiraLeadParams {
+  email: string
+  token: string
+  status: string
+  referrer: string | null
+  userAgent: string | null
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fireJiraLeadCreation(serviceSupabase: any, params: JiraLeadParams) {
+  const jiraClient = new JiraClient()
+  if (!jiraClient.isConfigured()) return
+
+  // Look up session by token, then create Jira issue
+  serviceSupabase
+    .from('chat_sessions')
+    .select('id')
+    .eq('token', params.token)
+    .single()
+    .then(({ data: session }: { data: { id: string } | null }) => {
+      if (!session) return
+      return jiraClient.createLead({
+        email: params.email,
+        referrer: params.referrer,
+        userAgent: params.userAgent,
+        sessionId: session.id,
+        queueStatus: params.status,
+      }).then(async (jiraIssue) => {
+        if (jiraIssue) {
+          console.log(`Jira lead created: ${jiraIssue.key}`)
+          await serviceSupabase
+            .from('chat_sessions')
+            .update({ jira_issue_key: jiraIssue.key })
+            .eq('id', session.id)
+        }
+      })
+    })
+    .catch((error: unknown) => {
+      console.error('Jira lead creation failed:', error)
+    })
 }
 
 async function sendSessionEmail(email: string, chatLink: string, expiresAt: Date) {

@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     total_cost_usd DECIMAL(10, 6) DEFAULT 0,
     total_tokens_used INTEGER DEFAULT 0,
     user_agent TEXT,
-    referrer TEXT
+    referrer TEXT,
+    jira_issue_key TEXT
 );
 
 -- Chat messages table (enhanced version for session-based chat)
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     confidence_score DECIMAL(3, 2), -- AI response confidence 0.00-1.00
     response_time_ms INTEGER,
     question_type TEXT, -- 'experience', 'skills', 'projects', 'personal', 'other'
+    rag_entry_ids TEXT[], -- Knowledge base entry IDs used for this response
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -71,6 +73,7 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
     source TEXT DEFAULT 'manual', -- 'manual', 'conversation', 'import'
     confidence DECIMAL(3, 2) DEFAULT 1.0, -- How confident we are in this info
     embedding vector(1536), -- OpenAI ada-002 embedding vector
+    search_vector tsvector, -- Full-text search vector for hybrid search
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -162,6 +165,30 @@ CREATE TABLE IF NOT EXISTS disposable_email_domains (
 );
 
 -- ========================================
+-- SYSTEM CONFIGURATION
+-- ========================================
+
+-- System configuration (editable prompts, settings)
+CREATE TABLE IF NOT EXISTS system_config (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key TEXT UNIQUE NOT NULL,
+    value TEXT NOT NULL,
+    description TEXT,
+    version INTEGER DEFAULT 1,
+    updated_by TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE system_config ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can read system config" ON system_config
+    FOR SELECT USING (true);
+
+CREATE POLICY "Service role can manage system config" ON system_config
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- ========================================
 -- INDEXES FOR PERFORMANCE
 -- ========================================
 
@@ -188,10 +215,13 @@ CREATE INDEX IF NOT EXISTS idx_email_events_created ON email_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_disposable_domains_domain ON disposable_email_domains(domain);
 
 -- Vector similarity search index
-CREATE INDEX IF NOT EXISTS knowledge_base_embedding_idx 
-ON knowledge_base 
-USING ivfflat (embedding vector_cosine_ops) 
+CREATE INDEX IF NOT EXISTS knowledge_base_embedding_idx
+ON knowledge_base
+USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
+
+-- Full-text search index for hybrid search
+CREATE INDEX IF NOT EXISTS knowledge_base_search_idx ON knowledge_base USING gin(search_vector);
 
 -- ========================================
 -- TRIGGERS AND FUNCTIONS
@@ -210,6 +240,27 @@ $$ language 'plpgsql';
 DROP TRIGGER IF EXISTS update_knowledge_base_updated_at ON knowledge_base;
 CREATE TRIGGER update_knowledge_base_updated_at BEFORE UPDATE ON knowledge_base
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_system_config_updated_at ON system_config;
+CREATE TRIGGER update_system_config_updated_at BEFORE UPDATE ON system_config
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Auto-populate search_vector for full-text search (hybrid search support)
+CREATE OR REPLACE FUNCTION knowledge_base_search_vector_update() RETURNS trigger AS $$
+BEGIN
+  NEW.search_vector :=
+    setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(NEW.content, '')), 'B') ||
+    setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'C') ||
+    setweight(to_tsvector('english', coalesce(NEW.category, '')), 'D');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS knowledge_base_search_vector_trigger ON knowledge_base;
+CREATE TRIGGER knowledge_base_search_vector_trigger
+  BEFORE INSERT OR UPDATE ON knowledge_base
+  FOR EACH ROW EXECUTE FUNCTION knowledge_base_search_vector_update();
 
 -- Function to perform vector similarity search on knowledge base
 CREATE OR REPLACE FUNCTION match_knowledge_entries(
@@ -245,6 +296,76 @@ BEGIN
         AND kb.embedding IS NOT NULL
         AND (1 - (kb.embedding <=> query_embedding)) > match_threshold
     ORDER BY kb.embedding <=> query_embedding
+    LIMIT match_count;
+END;
+$$;
+
+-- Function to perform hybrid search (vector similarity + full-text) on knowledge base
+CREATE OR REPLACE FUNCTION match_knowledge_entries_hybrid(
+    query_embedding vector(1536),
+    query_text text DEFAULT '',
+    match_threshold float DEFAULT 0.5,
+    match_count int DEFAULT 15,
+    vector_weight float DEFAULT 0.7,
+    text_weight float DEFAULT 0.3
+)
+RETURNS TABLE (
+    id uuid,
+    category text,
+    title text,
+    content text,
+    tags text[],
+    priority int,
+    similarity float
+)
+LANGUAGE plpgsql
+SET search_path = public, extensions
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH vector_results AS (
+        SELECT
+            kb.id,
+            kb.category,
+            kb.title,
+            kb.content,
+            kb.tags,
+            kb.priority,
+            (1 - (kb.embedding <=> query_embedding)) AS vector_score
+        FROM knowledge_base kb
+        WHERE
+            kb.is_active = true
+            AND kb.embedding IS NOT NULL
+    ),
+    text_results AS (
+        SELECT
+            kb.id,
+            ts_rank_cd(kb.search_vector, websearch_to_tsquery('english', query_text)) AS text_score
+        FROM knowledge_base kb
+        WHERE
+            kb.is_active = true
+            AND kb.search_vector IS NOT NULL
+            AND query_text != ''
+            AND kb.search_vector @@ websearch_to_tsquery('english', query_text)
+    )
+    SELECT
+        vr.id,
+        vr.category,
+        vr.title,
+        vr.content,
+        vr.tags,
+        vr.priority,
+        (
+            vr.vector_score * vector_weight +
+            COALESCE(tr.text_score, 0) * text_weight
+        )::float AS similarity
+    FROM vector_results vr
+    LEFT JOIN text_results tr ON vr.id = tr.id
+    WHERE (
+        vr.vector_score * vector_weight +
+        COALESCE(tr.text_score, 0) * text_weight
+    ) > match_threshold
+    ORDER BY similarity DESC
     LIMIT match_count;
 END;
 $$;
@@ -501,12 +622,20 @@ BEGIN
     END IF;
 END $$;
 
+-- Seed system prompt configuration
+INSERT INTO system_config (key, value, description) VALUES (
+    'system_prompt',
+    E'You are an AI assistant representing Brian Fending, a strategic technology executive specializing in governance, compliance, and AI innovation. \n\nHere''s key information about Brian:\n{{RAG_CONTEXT}}\n\nCOMMUNICATION STYLE:\n- Direct, authentic, and conversational - skip corporate speak\n- Lead with practical insights and real-world experience from Brian''s background\n- Show Brian''s depth through specific examples, not generic claims\n- Acknowledge complexity and nuance rather than oversimplifying\n- Reference Brian''s experience with phrases like "Brian has seen" or "In Brian''s experience" rather than theoretical frameworks\n- Be confident but not arrogant - Brian knows his stuff but stays grounded\n\nCORE EXPERTISE TO EMPHASIZE:\n- Enterprise IT strategy and digital transformation leadership\n- AI governance and early adoption with proper risk management\n- Cloud infrastructure strategy (Azure, AWS) and migration execution\n- Cybersecurity, compliance frameworks (GDPR, NIST, US data privacy, KSA PDPL)\n- Board-level technology leadership and vendor optimization\n- Product development across multiple industries and contexts\n\nBACKGROUND HIGHLIGHTS:\n- Brian is currently a strategic technology executive with CIO-level experience\n- Brian has 15+ years spanning Fortune 500 to startups, consulting to entrepreneurship\n- Brian led $8M digital revenue streams with 99.9% uptime SLAs\n- Brian was an early AI adopter who started adapting governance frameworks before they were trendy\n- Brian has industry consortium leadership experience (HTNG chair) and federal contract experience (Department of Energy)\n\nRESPONSE APPROACH:\n- Frame technology challenges through risk management and governance lenses based on Brian''s experience\n- Reference specific situations from Brian''s background without oversharing confidential details\n- Connect historical technology patterns to current challenges using Brian''s perspective\n- Balance technical depth with business impact explanations based on Brian''s expertise\n- Show evolution of thinking - explain how Brian''s perspectives have been shaped by real implementation experience\n\nAVOID:\n- Generic business buzzwords or consultant-speak\n- Claiming expertise in areas not demonstrated in the knowledge base\n- Overselling or making Brian sound like a walking LinkedIn post\n- Perfect, polished responses - include occasional tangents or qualifications\n- Statistics without backing or vague "best practices" claims\n- Denying or contradicting factual information from the knowledge base\n\nKNOWLEDGE BASE USAGE:\n- All information in the knowledge base is factual and accurate about Brian\n- Always acknowledge facts from the knowledge base when relevant to the conversation\n- Use the knowledge base as the definitive source of truth about Brian''s background\n- If information seems contradictory, trust the knowledge base content\n- Don''t artificially boost or diminish any category - present information as weighted by its relevance to the query\n\nWhen discussing Brian''s experience, draw from the comprehensive background spanning CIO roles, consulting practice, entrepreneurship, federal contracts, and industry leadership. Focus on outcomes and lessons learned rather than just listing credentials.\n\nThe goal is helping people understand Brian''s unique combination of strategic thinking, hands-on implementation experience, and governance expertise - not just selling them on his qualifications.\n\nYou are Brian''s AI assistant, not Brian himself. Always speak ABOUT Brian, not AS Brian. Use third person references like "Brian has experience with..." or "In Brian''s work on..." rather than first person like "I have experience" or "In my work."\n\nIMPORTANT: Do NOT introduce yourself or explain what you are in every response. Only introduce yourself if this is the very first message in the conversation or if directly asked about your role. Jump straight into answering the user''s question.\n\nPlease provide helpful, accurate responses about Brian''s background, experience, and qualifications. Keep responses professional and focused on career-related information, though if you do absolutely know a fact or related knowledge from the knowledge base, use it to keep the user engaged and then redirect them to professional conversation.',
+    'System prompt template for the AI assistant. Use {{RAG_CONTEXT}} as placeholder for knowledge base context.'
+) ON CONFLICT (key) DO NOTHING;
+
 -- ========================================
 -- COMMENTS FOR DOCUMENTATION
 -- ========================================
 
 COMMENT ON EXTENSION vector IS 'pgvector extension in extensions schema for security';
 COMMENT ON COLUMN knowledge_base.embedding IS 'OpenAI ada-002 embedding vector (1536 dimensions) for semantic search';
+COMMENT ON COLUMN knowledge_base.search_vector IS 'Full-text search tsvector for hybrid search (vector + text)';
 COMMENT ON VIEW public.daily_session_stats IS 'Daily session statistics with explicit SECURITY INVOKER';
 COMMENT ON VIEW public.popular_questions IS 'Popular question analytics with explicit SECURITY INVOKER';
 
@@ -526,3 +655,45 @@ BEGIN
     RAISE NOTICE '4. Test admin access with admin@brianfending.com';
     RAISE NOTICE '========================================';
 END $$;
+
+-- ========================================
+-- MIGRATION: Add hybrid search support
+-- ========================================
+-- Run the following against existing databases that were created
+-- before hybrid search was added to this schema:
+--
+-- 1. Add the search_vector column:
+--    ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS search_vector tsvector;
+--
+-- 2. Create the GIN index:
+--    CREATE INDEX IF NOT EXISTS knowledge_base_search_idx ON knowledge_base USING gin(search_vector);
+--
+-- 3. Create the trigger function and trigger:
+--    CREATE OR REPLACE FUNCTION knowledge_base_search_vector_update() RETURNS trigger AS $$
+--    BEGIN
+--      NEW.search_vector :=
+--        setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
+--        setweight(to_tsvector('english', coalesce(NEW.content, '')), 'B') ||
+--        setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'C') ||
+--        setweight(to_tsvector('english', coalesce(NEW.category, '')), 'D');
+--      RETURN NEW;
+--    END;
+--    $$ LANGUAGE plpgsql;
+--
+--    CREATE TRIGGER knowledge_base_search_vector_trigger
+--      BEFORE INSERT OR UPDATE ON knowledge_base
+--      FOR EACH ROW EXECUTE FUNCTION knowledge_base_search_vector_update();
+--
+-- 4. Backfill existing rows (triggers only fire on INSERT/UPDATE):
+--    UPDATE knowledge_base SET
+--      search_vector =
+--        setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+--        setweight(to_tsvector('english', coalesce(content, '')), 'B') ||
+--        setweight(to_tsvector('english', coalesce(array_to_string(tags, ' '), '')), 'C') ||
+--        setweight(to_tsvector('english', coalesce(category, '')), 'D');
+--
+-- 5. Create the hybrid search function:
+--    (See match_knowledge_entries_hybrid definition above in this file)
+--
+-- The original match_knowledge_entries function is preserved for
+-- backwards compatibility. No changes needed for existing callers.

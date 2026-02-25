@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Search, Plus, Edit, Trash2, Save, X, BookOpen, Tag, Calendar, Upload, Download } from 'lucide-react'
+import { Search, Plus, Edit, Trash2, Save, X, BookOpen, Tag, Calendar, Upload, Download, FileText, Check } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 interface KnowledgeEntry {
@@ -55,6 +55,29 @@ export default function KnowledgeBase({ prefilledData, onDataUsed }: KnowledgeBa
   }
   const [importErrors, setImportErrors] = useState<string[]>([])
   const [showPreview, setShowPreview] = useState(false)
+
+  // Document ingestion state
+  const [showDocumentModal, setShowDocumentModal] = useState(false)
+  const [documentText, setDocumentText] = useState('')
+  const [documentSource, setDocumentSource] = useState('document')
+  const [documentPriority, setDocumentPriority] = useState(3)
+  const [documentProcessing, setDocumentProcessing] = useState(false)
+  const [documentEntries, setDocumentEntries] = useState<Array<{
+    category: string
+    title: string
+    content: string
+    tags: string[]
+    priority: number
+    source: string
+    selected: boolean
+  }>>([])
+  const [documentStats, setDocumentStats] = useState<{
+    totalChunks: number
+    categorized: number
+    errors: string[]
+  } | null>(null)
+  const [documentStep, setDocumentStep] = useState<'input' | 'preview'>('input')
+  const [documentImporting, setDocumentImporting] = useState(false)
 
   // Robust CSV parsing function with full quote and multiline support
   const parseCSV = (content: string): ImportEntry[] => {
@@ -377,6 +400,103 @@ affiliations,"IEEE Member","Active member of IEEE Computer Society, contributing
     setShowAddForm(true)
   }
 
+  const resetDocumentModal = () => {
+    setShowDocumentModal(false)
+    setDocumentText('')
+    setDocumentSource('document')
+    setDocumentPriority(3)
+    setDocumentProcessing(false)
+    setDocumentEntries([])
+    setDocumentStats(null)
+    setDocumentStep('input')
+    setDocumentImporting(false)
+  }
+
+  const processDocument = async () => {
+    if (!documentText.trim()) return
+
+    setDocumentProcessing(true)
+    try {
+      const sessionToken = localStorage.getItem('sessionToken')
+      const response = await fetch(`/api/admin/knowledge/ingest?token=${sessionToken}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: documentText,
+          source: documentSource,
+          defaultPriority: documentPriority,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Processing failed')
+      }
+
+      setDocumentEntries(
+        data.entries.map((entry: { category: string; title: string; content: string; tags: string[]; priority: number; source: string }) => ({
+          ...entry,
+          selected: true,
+        }))
+      )
+      setDocumentStats(data.stats)
+      setDocumentStep('preview')
+    } catch (error) {
+      console.error('Document processing error:', error)
+      alert(`Failed to process document: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setDocumentProcessing(false)
+    }
+  }
+
+  const importDocumentEntries = async () => {
+    const selected = documentEntries.filter(e => e.selected)
+    if (selected.length === 0) return
+
+    setDocumentImporting(true)
+    try {
+      const sessionToken = localStorage.getItem('sessionToken')
+      // Send only the selected entries for DB insertion
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const entriesToInsert = selected.map(({ selected: _selected, ...rest }) => rest)
+      const response = await fetch(`/api/admin/knowledge/ingest?token=${sessionToken}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: entriesToInsert }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Import failed')
+      }
+
+      await fetchEntries()
+      resetDocumentModal()
+    } catch (error) {
+      console.error('Document import error:', error)
+      alert(`Failed to import entries: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setDocumentImporting(false)
+    }
+  }
+
+  const toggleDocumentEntry = (index: number) => {
+    setDocumentEntries(prev =>
+      prev.map((entry, i) =>
+        i === index ? { ...entry, selected: !entry.selected } : entry
+      )
+    )
+  }
+
+  const toggleAllDocumentEntries = () => {
+    const allSelected = documentEntries.every(e => e.selected)
+    setDocumentEntries(prev =>
+      prev.map(entry => ({ ...entry, selected: !allSelected }))
+    )
+  }
+
   const filteredEntries = entries.filter(entry => {
     const matchesSearch = entry.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -436,6 +556,13 @@ affiliations,"IEEE Member","Active member of IEEE Computer Society, contributing
             >
               <Upload className="h-4 w-4" />
               <span>Import CSV</span>
+            </button>
+            <button
+              onClick={() => setShowDocumentModal(true)}
+              className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center space-x-2"
+            >
+              <FileText className="h-4 w-4" />
+              <span>Import Document</span>
             </button>
             <button
               onClick={() => setShowAddForm(true)}
@@ -836,6 +963,239 @@ affiliations,"IEEE Member","Active member of IEEE Computer Society, contributing
                     </ul>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Document Import Modal */}
+      {showDocumentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Import Document</h3>
+              <button
+                onClick={resetDocumentModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {documentStep === 'input' ? (
+              <div className="space-y-4">
+                <p className="text-gray-600">
+                  Paste a resume, project description, or any text document. It will be automatically
+                  chunked, categorized, embedded, and added to the knowledge base.
+                </p>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Document Text
+                  </label>
+                  <textarea
+                    value={documentText}
+                    onChange={(e) => setDocumentText(e.target.value)}
+                    rows={14}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm"
+                    placeholder="Paste your document text here..."
+                    disabled={documentProcessing}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    {documentText.length} characters
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Source
+                    </label>
+                    <input
+                      type="text"
+                      value={documentSource}
+                      onChange={(e) => setDocumentSource(e.target.value)}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="e.g., resume, project-brief, bio"
+                      disabled={documentProcessing}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Default Priority
+                    </label>
+                    <select
+                      value={documentPriority}
+                      onChange={(e) => setDocumentPriority(parseInt(e.target.value))}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      disabled={documentProcessing}
+                    >
+                      <option value={1}>1 - Low</option>
+                      <option value={2}>2</option>
+                      <option value={3}>3 - Medium</option>
+                      <option value={4}>4</option>
+                      <option value={5}>5 - High</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={resetDocumentModal}
+                    className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                    disabled={documentProcessing}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={processDocument}
+                    disabled={!documentText.trim() || documentProcessing}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  >
+                    {documentProcessing ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Chunking and categorizing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4" />
+                        <span>Process Document</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Stats summary */}
+                {documentStats && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4 text-sm">
+                        <span className="font-medium text-purple-800">
+                          {documentStats.totalChunks} chunks created
+                        </span>
+                        <span className="text-purple-600">
+                          {documentStats.categorized} categorized
+                        </span>
+                        <span className="text-purple-600">
+                          {documentEntries.filter(e => e.selected).length} selected for import
+                        </span>
+                      </div>
+                    </div>
+                    {documentStats.errors.length > 0 && (
+                      <div className="mt-2 text-sm text-red-600">
+                        {documentStats.errors.length} warning(s):
+                        <ul className="list-disc list-inside mt-1">
+                          {documentStats.errors.map((err, i) => (
+                            <li key={i}>{err}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center">
+                  <h4 className="font-medium">
+                    Preview ({documentEntries.length} entries)
+                  </h4>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={toggleAllDocumentEntries}
+                      className="text-sm text-purple-600 hover:text-purple-800"
+                    >
+                      {documentEntries.every(e => e.selected) ? 'Deselect All' : 'Select All'}
+                    </button>
+                    <button
+                      onClick={() => setDocumentStep('input')}
+                      className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={importDocumentEntries}
+                      disabled={documentEntries.filter(e => e.selected).length === 0 || documentImporting}
+                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      {documentImporting ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Importing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4" />
+                          <span>Import {documentEntries.filter(e => e.selected).length} Entries</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left w-10"></th>
+                        <th className="px-4 py-2 text-left">Category</th>
+                        <th className="px-4 py-2 text-left">Title</th>
+                        <th className="px-4 py-2 text-left">Content</th>
+                        <th className="px-4 py-2 text-left">Tags</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {documentEntries.map((entry, index) => (
+                        <tr
+                          key={index}
+                          className={`border-t cursor-pointer ${entry.selected ? 'bg-white' : 'bg-gray-50 opacity-60'}`}
+                          onClick={() => toggleDocumentEntry(index)}
+                        >
+                          <td className="px-4 py-2">
+                            <input
+                              type="checkbox"
+                              checked={entry.selected}
+                              onChange={() => toggleDocumentEntry(index)}
+                              className="h-4 w-4 text-purple-600 rounded border-gray-300"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                              {entry.category}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 font-medium text-sm">{entry.title}</td>
+                          <td className="px-4 py-2">
+                            <div className="max-w-xs text-sm text-gray-600 truncate" title={entry.content}>
+                              {entry.content}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex flex-wrap gap-1">
+                              {entry.tags.slice(0, 3).map((tag, tagIndex) => (
+                                <span key={tagIndex} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded">
+                                  {tag}
+                                </span>
+                              ))}
+                              {entry.tags.length > 3 && (
+                                <span className="text-xs text-gray-500">+{entry.tags.length - 3} more</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

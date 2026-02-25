@@ -13,6 +13,7 @@ interface Session {
   total_cost_usd: number
   total_tokens_used: number
   queue_position: number | null
+  jira_issue_key: string | null
 }
 
 export default function SessionsList() {
@@ -100,6 +101,16 @@ export default function SessionsList() {
                     <div className="text-sm font-medium text-gray-900">
                       {session.email || 'Anonymous'}
                     </div>
+                    {session.jira_issue_key && (
+                      <a
+                        href={`${process.env.NEXT_PUBLIC_JIRA_BASE_URL || 'https://madeinc.atlassian.net'}/browse/${session.jira_issue_key}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center mt-1 px-1.5 py-0.5 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100"
+                      >
+                        {session.jira_issue_key}
+                      </a>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(session.status)}`}>
