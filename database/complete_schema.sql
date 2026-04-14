@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 -- Knowledge base for Brian's career information with vector embeddings
 CREATE TABLE IF NOT EXISTS knowledge_base (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    category TEXT NOT NULL CHECK (category IN ('affiliations', 'experience', 'skills', 'projects', 'education', 'personal', 'company')),
+    category TEXT NOT NULL CHECK (category IN ('affiliations', 'experience', 'skills', 'projects', 'education', 'personal', 'company', 'podcast', 'writing', 'appearance', 'media')),
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     tags TEXT[],
