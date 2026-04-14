@@ -23,6 +23,52 @@ export default function StreamingMessage({
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const cursorIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Helper function to get next chunk of text (word-aware)
+  const getNextChunk = (text: string, startIndex: number): string => {
+    if (startIndex >= text.length) return ''
+
+    const remainingText = text.slice(startIndex)
+
+    // If we're at a space or punctuation, show the next word
+    const wordMatch = remainingText.match(/^(\s*\S+)/)
+    if (wordMatch && wordMatch[1].length <= 15) { // Don't chunk very long words
+      return wordMatch[1]
+    }
+
+    // For very long words or other cases, fall back to character-by-character
+    return remainingText[0]
+  }
+
+  // Helper function to calculate typing delay based on context
+  const getTypingDelay = (text: string, idx: number): number => {
+    if (idx >= text.length) return 0
+
+    const currentChar = text[idx]
+
+    // Longer pauses after sentences and line breaks
+    if (currentChar === '.' || currentChar === '!' || currentChar === '?') {
+      return 200
+    }
+
+    // Medium pause after commas and colons
+    if (currentChar === ',' || currentChar === ':' || currentChar === ';') {
+      return 100
+    }
+
+    // Shorter pause after spaces (word boundaries)
+    if (currentChar === ' ') {
+      return 50
+    }
+
+    // Line breaks get longer pauses
+    if (currentChar === '\n') {
+      return 300
+    }
+
+    // Default typing speed for characters
+    return 20
+  }
+
   useEffect(() => {
     if (isStreaming && role === 'assistant') {
       // Start cursor blinking
@@ -78,52 +124,6 @@ export default function StreamingMessage({
       setShowCursor(true)
     }
   }, [content, isStreaming, currentIndex])
-
-  // Helper function to get next chunk of text (word-aware)
-  const getNextChunk = (text: string, startIndex: number): string => {
-    if (startIndex >= text.length) return ''
-    
-    const remainingText = text.slice(startIndex)
-    
-    // If we're at a space or punctuation, show the next word
-    const wordMatch = remainingText.match(/^(\s*\S+)/)
-    if (wordMatch && wordMatch[1].length <= 15) { // Don't chunk very long words
-      return wordMatch[1]
-    }
-    
-    // For very long words or other cases, fall back to character-by-character
-    return remainingText[0]
-  }
-
-  // Helper function to calculate typing delay based on context
-  const getTypingDelay = (text: string, currentIndex: number): number => {
-    if (currentIndex >= text.length) return 0
-    
-    const currentChar = text[currentIndex]
-    
-    // Longer pauses after sentences and line breaks
-    if (currentChar === '.' || currentChar === '!' || currentChar === '?') {
-      return 200
-    }
-    
-    // Medium pause after commas and colons
-    if (currentChar === ',' || currentChar === ':' || currentChar === ';') {
-      return 100
-    }
-    
-    // Shorter pause after spaces (word boundaries)
-    if (currentChar === ' ') {
-      return 50
-    }
-    
-    // Line breaks get longer pauses
-    if (currentChar === '\n') {
-      return 300
-    }
-    
-    // Default typing speed for characters
-    return 20
-  }
 
   const isAssistant = role === 'assistant'
 
