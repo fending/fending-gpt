@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { User } from '@/types'
 import { LogOut, Settings, User as UserIcon } from 'lucide-react'
@@ -12,24 +12,23 @@ export default function Header() {
   const supabase = createClient()
   const router = useRouter()
 
-  const getUser = useCallback(async () => {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (authUser) {
+  useEffect(() => {
+    let cancelled = false
+    const fetchUser = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (cancelled || !authUser) return
       const { data } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
         .single()
-      
-      if (data) {
+      if (!cancelled && data) {
         setUser(data)
       }
     }
+    fetchUser()
+    return () => { cancelled = true }
   }, [supabase])
-
-  useEffect(() => {
-    getUser()
-  }, [getUser])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()

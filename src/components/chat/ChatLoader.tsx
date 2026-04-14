@@ -68,7 +68,10 @@ const PHASE_DURATIONS = {
 
 export default function ChatLoader({ onAbort, onAbortComplete, originalMessage = "" }: ChatLoaderProps) {
   const [elapsedTime, setElapsedTime] = useState(0)
-  const [currentPhrase, setCurrentPhrase] = useState("")
+  const [currentPhrase, setCurrentPhrase] = useState(() => {
+    const phrases = LOADER_PHRASES.quick
+    return phrases[Math.floor(Math.random() * phrases.length)]
+  })
   const [showAborted, setShowAborted] = useState(false)
   const [/* minDisplayMet */, setMinDisplayMet] = useState(false)
 
@@ -119,9 +122,6 @@ export default function ChatLoader({ onAbort, onAbortComplete, originalMessage =
         return newElapsed
       })
     }, 100)
-
-    // Set initial phrase
-    setCurrentPhrase(getRandomPhrase('quick'))
 
     return () => {
       clearTimeout(minDisplayTimer)

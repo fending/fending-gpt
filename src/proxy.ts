@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function middleware(_request: NextRequest) {
+export async function proxy(_request: Request) {
   // For session-token based auth, we don't need Supabase Auth middleware
   // Session validation happens in the API routes and components
   return NextResponse.next()

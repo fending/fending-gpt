@@ -17,7 +17,7 @@ export default function SessionManager({ sessionToken, onSessionExpired }: Sessi
   const [timeRemaining, setTimeRemaining] = useState(INACTIVITY_TIMEOUT)
   const [isActive, setIsActive] = useState(true)
   
-  const lastActivityRef = useRef(Date.now())
+  const lastActivityRef = useRef(0)
   const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const activityTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null)
