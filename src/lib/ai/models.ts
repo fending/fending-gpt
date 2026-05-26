@@ -22,8 +22,8 @@ export const MODEL_CONFIGS: Record<ModelType, ModelConfig> = {
   haiku: {
     modelId: 'claude-haiku-4-5-20251001',
     costPerToken: {
-      input: 0.0008,  // $0.80 per 1M tokens
-      output: 0.004,  // $4 per 1M tokens
+      input: 0.001,  // $1 per 1M tokens
+      output: 0.005, // $5 per 1M tokens
     },
   },
 }
