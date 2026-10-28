@@ -20,9 +20,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Brian's AI Assistant",
-  description: "Get instant answers about Brian Fending's background, experience, and skills. Perfect for recruiters and potential collaborators.",
-  keywords: "Brian Fending, AI assistant, recruiter, software engineer, technical leadership",
+  title: "Ask about Brian Fending's work",
+  description: "Questions about Brian Fending's fractional CIO, advisory, and AI governance work, answered from his published writing and career history. Useful for executives and referral partners sizing up a fit.",
+  keywords: "fractional CIO, AI governance, AI enablement, association technology, technology leadership, Brian Fending",
   authors: [{ name: "Brian Fending" }],
   icons: {
     icon: '/favicon/favicon.ico',

@@ -320,7 +320,7 @@ export default function SessionChatInterface({ sessionToken }: SessionChatInterf
                 <li>Technical skills and experience</li>
                 <li>Recent projects and achievements</li>
                 <li>Leadership and team experience</li>
-                <li>Career goals and interests</li>
+                <li>How the fractional CIO seat works</li>
               </ul>
             </div>
           </div>
