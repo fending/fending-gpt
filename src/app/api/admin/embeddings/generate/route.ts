@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { OpenAIEmbeddingService } from '@/lib/embeddings/openai'
+import { requireAdmin, extractSessionToken } from '@/lib/auth/middleware'
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin access; this route spends OpenAI credits
+    const sessionToken = extractSessionToken(request)
+    if (!sessionToken) {
+      return NextResponse.json({ error: 'Session token required' }, { status: 401 })
+    }
+
+    const authResult = await requireAdmin(sessionToken)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status || 500 })
+    }
+
     const { searchParams } = new URL(request.url)
     const forceAll = searchParams.get('force') === 'true'
 

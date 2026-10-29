@@ -172,10 +172,10 @@ function EmailCollectionForm({
                 className="rounded-lg"
               />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900">Meet Brian&apos;s AI Assistant</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Ask about Brian&apos;s work</h2>
             <p className="text-gray-600 mt-2">
-              Get instant answers about Brian&apos;s background, experience, and skills.
-              Perfect for recruiters and potential collaborators.
+              Questions about fractional CIO seats, oversight subscriptions, advisory retainers, AI governance engagements, or Brian&apos;s background. Answers draw on his published writing and career history.
+              Useful for executives and referral partners sizing up a fit.
             </p>
           </div>
 

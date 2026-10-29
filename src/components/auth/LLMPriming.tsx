@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 
-const LLM_PROMPT = `I'm learning about Brian Fending as a technology leader and want to understand his background and expertise. What are his areas of focus, what kind of problems has he solved, and what makes his experience stand out? Summarize the highlights from brianfending.com including recent articles and tools.brianfending.com.`
+const LLM_PROMPT = `I'm evaluating Brian Fending, a former CIO who leads fractional CIO and advisory engagements through MADE, Inc. and AI governance and enablement work through Ordovera Advisory. What are his areas of expertise, what kinds of organizations and problems does he work on, and how do the two practices differ? Summarize the highlights from brianfending.com, madeinc.xyz, and ordovera.com.`
 
 interface LLMPlatform {
   name: string
@@ -24,7 +24,7 @@ export default function LLMPriming() {
       window.gtag('event', 'llm_prompt_click', {
         'llm_platform': platform,
         'site': 'ai.brianfending',
-        'prompt_version': 'v1_2025_11'
+        'prompt_version': 'v3_2026_10'
       })
     }
   }
@@ -32,7 +32,7 @@ export default function LLMPriming() {
   const platforms: LLMPlatform[] = [
     {
       name: 'ChatGPT',
-      url: 'https://chat.openai.com/',
+      url: 'https://chatgpt.com/',
       paramName: 'q',
       imagePath: '/llm-icons/chatgpt.webp'
     },

@@ -4,7 +4,7 @@ Guidance for Claude Code in the fending-gpt project.
 
 ## Overview
 
-AI chat assistant at ai.brianfending.com. Helps recruiters learn about Brian's background. Provider-agnostic design with session management, admin dashboard, and training interface.
+AI chat assistant at ai.brianfending.com. Answers questions from executives and referral partners about Brian's practices and background. Provider-agnostic design with session management, admin dashboard, and training interface.
 
 **Stack**: Next.js 15 (App Router), React 19, TypeScript, Supabase, Anthropic Claude SDK
 
